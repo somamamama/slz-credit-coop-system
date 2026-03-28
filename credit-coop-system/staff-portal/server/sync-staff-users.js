@@ -2,20 +2,20 @@ const { Pool } = require('pg');
 
 // Staff portal database connection
 const staffPool = new Pool({
-    user: 'postgres',
-    password: 'password',
-    host: 'localhost',
-    database: 'slz_coop_staff',
-    port: 5432,
+    user: process.env.DB_USER || 'slz_app',
+    password: process.env.DB_PASSWORD || 'password',
+    host: process.env.DB_HOST || 'localhost',
+    database: process.env.DB_NAME || 'slz_coop_staff',
+    port: process.env.DB_PORT || 5432,
 });
 
 // Members database connection
 const membersPool = new Pool({
-    user: 'postgres',
-    password: 'password',
-    host: 'localhost',
+    user: process.env.DB_USER || 'slz_app',
+    password: process.env.DB_PASSWORD || 'password',
+    host: process.env.DB_HOST || 'localhost',
     database: 'slz_members',
-    port: 5432,
+    port: process.env.DB_PORT || 5432,
 });
 
 async function syncStaffUsers() {
