@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import './MembershipApplication.css';
-import { ReactComponent as DollarIcon } from '../assets/icons/finance/dollar-sign-round-svgrepo-com.svg';
 import { ReactComponent as CheckCircleIcon } from '../assets/icons/finance/check-circle-svgrepo-com.svg';
 
 const MembershipApplication = () => {
