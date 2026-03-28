@@ -46,12 +46,13 @@ router.post('/register', validinfo, async (req, res) => {
 //login route
 router.post('/login', validinfo, async (req, res) => {
     try {
-        // Accept either employee_number or email for login
-        const { email, employee_number, password } = req.body;
+        // Accept either employee_number (snake_case or camelCase) or email for login
+        const { email, employee_number, employeeNumber, password } = req.body;
+        const empNum = employee_number || employeeNumber;
 
         let userRes;
-        if (employee_number) {
-            userRes = await pool.query("SELECT * FROM users WHERE employee_number = $1", [employee_number]);
+        if (empNum) {
+            userRes = await pool.query("SELECT * FROM users WHERE employee_number = $1", [empNum]);
         } else {
             userRes = await pool.query("SELECT * FROM users WHERE user_email = $1", [email]);
         }
