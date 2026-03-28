@@ -1,0 +1,25 @@
+From 173c4cd589a8e7b4ec72400c5afd259f4c940d32 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Tue, 25 Nov 2025 22:06:11 +0800
+Subject: [PATCH 23/37] member-portal: add Loan Tracker link to header
+ navigation
+
+---
+ member-portal/src/components/Header.js | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/member-portal/src/components/Header.js b/member-portal/src/components/Header.js
+index 9df8780..8d2c274 100644
+--- a/member-portal/src/components/Header.js
++++ b/member-portal/src/components/Header.js
+@@ -52,6 +52,7 @@ const Header = () => {
+                 >
+                   Loans
+                 </Link>
++                <Link to="/loan-tracker" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Loan Tracker</Link>
+                 <Link to="/payment-dues" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Payment Dues</Link>
+                 <a href="#profile" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Profile</a>
+                 <button onClick={handleLogout} className="btn btn-secondary btn-sm">
+-- 
+2.51.1
+

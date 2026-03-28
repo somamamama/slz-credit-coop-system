@@ -1,0 +1,128 @@
+From e28fdcaccd57015a4af4cde1221b794d0dca38e1 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Sun, 23 Nov 2025 10:22:10 +0800
+Subject: [PATCH 07/37] feat(reports): add PDF download via jsPDF (CDN) and
+ generation state
+
+---
+ staff-portal/src/pages/Reports.js | 93 +++++++++++++++++++++++++------
+ 1 file changed, 75 insertions(+), 18 deletions(-)
+
+diff --git a/staff-portal/src/pages/Reports.js b/staff-portal/src/pages/Reports.js
+index cb63323..e28f29b 100644
+--- a/staff-portal/src/pages/Reports.js
++++ b/staff-portal/src/pages/Reports.js
+@@ -92,24 +92,81 @@ const Reports = () => {
+     }
+   };
+ 
+-  const downloadCSV = () => {
++  const [generating, setGenerating] = useState(false);
++
++  const loadScript = (src) => new Promise((resolve, reject) => {
++    const existing = document.querySelector(`script[src="${src}"]`);
++    if (existing) return resolve();
++    const s = document.createElement('script');
++    s.src = src;
++    s.onload = () => resolve();
++    s.onerror = (e) => reject(e);
++    document.body.appendChild(s);
++  });
++
++  const downloadPDF = async () => {
+     if (!data) return;
+-    let csv = '';
+-    csv += data.headers.join(',') + '\n';
+-    data.rows.forEach((r) => {
+-      if (reportType === 'financial') {
+-        csv += [r.period, r.deposits, r.loans, r.interest, r.expenses, r.net].join(',') + '\n';
+-      } else {
+-        csv += [r.id, `"${r.name}"`, r.joined, r.shares, r.contribution].join(',') + '\n';
++    try {
++      setGenerating(true);
++      // load jsPDF UMD from CDN if not present
++      if (!window.jspdf) {
++        await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+       }
+-    });
+-    const blob = new Blob([csv], { type: 'text/csv' });
+-    const url = URL.createObjectURL(blob);
+-    const a = document.createElement('a');
+-    a.href = url;
+-    a.download = `${reportType}-report-${from}_to_${to}.csv`;
+-    a.click();
+-    URL.revokeObjectURL(url);
++      const jsPDF = window.jspdf ? window.jspdf.jsPDF : null;
++      if (!jsPDF) throw new Error('jsPDF not available');
++
++      const doc = new jsPDF({ unit: 'pt', format: 'letter' });
++      const margin = 40;
++      let y = 60;
++      doc.setFontSize(14);
++      doc.text(`${reportType === 'financial' ? 'Financial' : 'Member'} Report`, margin, y);
++      doc.setFontSize(10);
++      y += 18;
++      doc.text(`Period: ${from} — ${to}`, margin, y);
++      y += 18;
++
++      // draw headers
++      const colX = [];
++      const pageWidth = doc.internal.pageSize.getWidth();
++      const usableWidth = pageWidth - margin * 2;
++      const headers = data.headers;
++      const colWidth = usableWidth / headers.length;
++      headers.forEach((h, i) => colX.push(margin + i * colWidth));
++
++      doc.setFontSize(9);
++      doc.setFillColor(245, 245, 250);
++      // header row
++      headers.forEach((h, i) => {
++        doc.text(String(h), colX[i] + 4, y);
++      });
++      y += 16;
++
++      // rows
++      for (let ri = 0; ri < data.rows.length; ri++) {
++        const r = data.rows[ri];
++        const cells = reportType === 'financial'
++          ? [r.period, r.deposits, r.loans, r.interest, r.expenses, r.net]
++          : [r.id, r.name, r.joined, r.shares, r.contribution];
++
++        cells.forEach((c, i) => {
++          const text = String(c ?? '');
++          doc.text(text, colX[i] + 4, y);
++        });
++        y += 14;
++        if (y > doc.internal.pageSize.getHeight() - 60) {
++          doc.addPage();
++          y = 60;
++        }
++      }
++
++      const fileName = `${reportType}-report-${from}_to_${to}.pdf`;
++      doc.save(fileName);
++    } catch (err) {
++      console.error('PDF generation error', err);
++      alert('Failed to generate PDF: ' + (err.message || err));
++    } finally {
++      setGenerating(false);
++    }
+   };
+ 
+   const preview = useMemo(() => data, [data]);
+@@ -158,10 +215,10 @@ const Reports = () => {
+             <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPreset('custom'); }} />
+           </label>
+ 
+-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
++            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+             <button className="btn btn-primary" onClick={handleGenerate}>Generate Report</button>
+             <button className="btn" onClick={() => { setData(null); }}>Clear</button>
+-            <button className="btn" onClick={downloadCSV} disabled={!data}>Download CSV</button>
++            <button className="btn" onClick={downloadPDF} disabled={!data || generating}>{generating ? 'Generating...' : 'Download PDF'}</button>
+           </div>
+         </div>
+       </div>
+-- 
+2.51.1
+

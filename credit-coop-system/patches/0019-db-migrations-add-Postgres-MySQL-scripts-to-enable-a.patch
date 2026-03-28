@@ -1,0 +1,141 @@
+From 7b8c9a9a62fcd21666316ef993fa292b55d1781a Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Tue, 25 Nov 2025 21:32:15 +0800
+Subject: [PATCH 19/37] db-migrations: add Postgres/MySQL scripts to enable
+ auto-generated application_id and README
+
+---
+ db-migrations/README_AUTO_ID.md               | 27 ++++++++++
+ .../enable_auto_application_id_mysql.sql      | 28 +++++++++++
+ .../enable_auto_application_id_postgres.sql   | 50 +++++++++++++++++++
+ 3 files changed, 105 insertions(+)
+ create mode 100644 db-migrations/README_AUTO_ID.md
+ create mode 100644 db-migrations/enable_auto_application_id_mysql.sql
+ create mode 100644 db-migrations/enable_auto_application_id_postgres.sql
+
+diff --git a/db-migrations/README_AUTO_ID.md b/db-migrations/README_AUTO_ID.md
+new file mode 100644
+index 0000000..c9530b4
+--- /dev/null
++++ b/db-migrations/README_AUTO_ID.md
+@@ -0,0 +1,27 @@
++Auto-ID migration scripts
++=========================
++
++Inside this folder you'll find SQL scripts for enabling auto-generated IDs for an existing integer primary key column named `application_id` on a table assumed to be `loan_applications`.
++
++Files:
++- enable_auto_application_id_postgres.sql - For PostgreSQL databases. This creates a sequence and sets the column default to nextval(sequence), aligns the sequence to the current max id, and sets the column NOT NULL.
++- enable_auto_application_id_mysql.sql - For MySQL / MariaDB. This alters the column to AUTO_INCREMENT and sets the next auto-increment value to max(existing ids)+1.
++
++How to use
++----------
++1. BACKUP your database before running anything.
++2. Inspect the scripts and edit table/column names if your table isn't exactly `loan_applications` / `application_id`.
++3. Test on a staging copy.
++
++Postgres example (psql):
++  psql -h HOST -U USER -d DBNAME -f db-migrations/enable_auto_application_id_postgres.sql
++
++MySQL example (mysql client):
++  mysql -h HOST -u USER -p DBNAME < db-migrations/enable_auto_application_id_mysql.sql
++
++Notes and caveats
++-----------------
++- If your table currently has non-unique or NULL values in `application_id`, you'll need to clean those prior to converting.
++- For Postgres, the script creates a sequence and sets ownership; it will set the sequence's current value to the max existing id so future nextval() calls continue from max+1.
++- For MySQL, AUTO_INCREMENT requires the column to be indexed; if it's not PRIMARY KEY or indexed, add an index first.
++- If you want to auto-generate UUIDs rather than sequential integers, let me know and I can provide a migration script and optional trigger to populate UUIDs on insert.
+diff --git a/db-migrations/enable_auto_application_id_mysql.sql b/db-migrations/enable_auto_application_id_mysql.sql
+new file mode 100644
+index 0000000..5b5a1fc
+--- /dev/null
++++ b/db-migrations/enable_auto_application_id_mysql.sql
+@@ -0,0 +1,28 @@
++-- enable_auto_application_id_mysql.sql
++--
++-- Usage: run this on your MySQL / MariaDB database to make `application_id` auto-increment
++-- for an existing table `loan_applications` (adjust table/column names as needed).
++--
++-- NOTE: MySQL requires the AUTO_INCREMENT column to be an indexed integer primary key.
++-- If `application_id` is already the PRIMARY KEY, this will ALTER it to AUTO_INCREMENT.
++-- If not, you'll need to add the primary key/index.
++
++-- IMPORTANT: Back up your database before running any migration. Test on a staging DB first.
++
++-- Example (adjust schema/table as necessary):
++
++ALTER TABLE loan_applications
++  MODIFY COLUMN application_id INT NOT NULL AUTO_INCREMENT;
++
++-- After modifying the column, make sure the AUTO_INCREMENT next value is set to max+1
++-- (MySQL will auto-adjust, but you can explicitly set it):
++
++SET @maxid = (SELECT IFNULL(MAX(application_id), 0) FROM loan_applications);
++SET @next = @maxid + 1;
++SET @@session.sql_mode=REPLACE(@@session.sql_mode,'NO_AUTO_VALUE_ON_ZERO','');
++ALTER TABLE loan_applications AUTO_INCREMENT = @next;
++
++-- If the column is not PRIMARY KEY or INDEXED, you must add an index/PK first. For example:
++-- ALTER TABLE loan_applications ADD PRIMARY KEY (application_id);
++
++-- If your current values are non-unique or contain 0 or negative values, you'll need to clean them first.
+diff --git a/db-migrations/enable_auto_application_id_postgres.sql b/db-migrations/enable_auto_application_id_postgres.sql
+new file mode 100644
+index 0000000..acab1f7
+--- /dev/null
++++ b/db-migrations/enable_auto_application_id_postgres.sql
+@@ -0,0 +1,50 @@
++-- enable_auto_application_id_postgres.sql
++--
++-- Usage: run this on your PostgreSQL database to make `application_id` auto-generated
++-- for an existing table `loan_applications` (adjust table/column names as needed).
++--
++-- This script will:
++-- 1. Create a sequence (if not present)
++-- 2. Set the application_id default to nextval(sequence)
++-- 3. Set the sequence's current value to max(application_id)
++-- 4. Ensure the column is NOT NULL
++--
++-- IMPORTANT: Back up your database before running any migration. Test on a staging DB first.
++
++BEGIN;
++
++-- adjust these names to match your actual schema/table
++DO $$
++DECLARE
++    _table_name text := 'loan_applications';
++    _column_name text := 'application_id';
++    _seq_name text := _table_name || '_' || _column_name || '_seq';
++    _max_id bigint;
++BEGIN
++    -- create sequence if it doesn't exist
++    IF NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind = 'S' AND n.nspname = 'public' AND c.relname = _seq_name) THEN
++        EXECUTE format('CREATE SEQUENCE public.%I;', _seq_name);
++    END IF;
++
++    -- set default to use the sequence
++    EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I SET DEFAULT nextval(''public.%I'');', _table_name, _column_name, _seq_name);
++
++    -- set sequence ownership to the column
++    EXECUTE format('ALTER SEQUENCE public.%I OWNED BY public.%I.%I;', _seq_name, _table_name, _column_name);
++
++    -- set the sequence current value to max(id) so nextval gives max+1
++    EXECUTE format('SELECT MAX(%I) FROM public.%I;', _column_name, _table_name) INTO _max_id;
++    IF _max_id IS NULL THEN
++        _max_id := 0;
++    END IF;
++    -- set sequence to max_id
++    EXECUTE format('SELECT setval(pg_get_serial_sequence(''public.%I'', ''%I''), %s, true);', _table_name, _column_name, _max_id);
++
++    -- make column NOT NULL (if you want)
++    EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I SET NOT NULL;', _table_name, _column_name);
++END$$;
++
++COMMIT;
++
++-- After running this script, any new inserts that omit application_id will receive auto-generated values.
++-- If you need all inserts to use the sequence (including those that set application_id to NULL), consider adding a trigger.
+-- 
+2.51.1
+

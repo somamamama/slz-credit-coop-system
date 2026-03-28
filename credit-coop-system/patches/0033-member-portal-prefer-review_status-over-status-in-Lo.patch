@@ -1,0 +1,29 @@
+From ee1742be6056c85bae30bbcdf33d77051b5e0c79 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Wed, 26 Nov 2025 01:47:13 +0800
+Subject: [PATCH 33/37] member-portal: prefer review_status over status in
+ LoanTracker so approved shows correctly
+
+---
+ member-portal/src/pages/LoanTracker.js | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/member-portal/src/pages/LoanTracker.js b/member-portal/src/pages/LoanTracker.js
+index 3e790aa..1518497 100644
+--- a/member-portal/src/pages/LoanTracker.js
++++ b/member-portal/src/pages/LoanTracker.js
+@@ -110,8 +110,9 @@ const LoanTracker = () => {
+ 
+   // Step status helpers
+   const hasApplication = !!application;
+-  const status = application?.status ?? application?.review_status ?? application?.status;
+-  const isApproved = status === 'approved' || status === 'paid';
++  // Prefer review_status (set by staff) over status when available
++  const status = application?.review_status ?? application?.status ?? null;
++  const isApproved = (application?.review_status === 'approved' || application?.review_status === 'paid') || (status === 'approved' || status === 'paid');
+   const amountAssigned = !!(application?.loan_amount || application?.amount || application?.requested_amount || application?.monthly_payment);
+ 
+   const steps = [
+-- 
+2.51.1
+

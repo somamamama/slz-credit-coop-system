@@ -1,0 +1,119 @@
+From a9f26881cf62cd228168dded77c0bcedf7d4feca Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Tue, 25 Nov 2025 22:49:07 +0800
+Subject: [PATCH 30/37] member-portal: fix polling logic; start/stop polling
+ based on application state to avoid stale closures
+
+---
+ member-portal/src/pages/LoanTracker.js | 83 +++++++++++++-------------
+ 1 file changed, 40 insertions(+), 43 deletions(-)
+
+diff --git a/member-portal/src/pages/LoanTracker.js b/member-portal/src/pages/LoanTracker.js
+index 2f77fff..3e790aa 100644
+--- a/member-portal/src/pages/LoanTracker.js
++++ b/member-portal/src/pages/LoanTracker.js
+@@ -33,6 +33,7 @@ const LoanTracker = () => {
+   const [application, setApplication] = useState(null);
+   const [error, setError] = useState(null);
+ 
++  // Initial fetch of applications for the user
+   useEffect(() => {
+     if (!user) return;
+     const fetchApps = async () => {
+@@ -62,54 +63,50 @@ const LoanTracker = () => {
+       } finally { setLoading(false); }
+     };
+     fetchApps();
+-    // Poll for updates while application exists and is not yet approved/assigned
+-    let intervalId = null;
+-    const startPolling = () => {
+-      if (intervalId) return;
+-      intervalId = setInterval(async () => {
+-        try {
+-          const query = `user_id=${encodeURIComponent(user.user_id)}`;
+-          const relativeUrl = `/api/loan-application/list?${query}`;
+-          const fallbackUrl = `http://localhost:5001/api/loan-application/list?${query}`;
+-          const doFetch = async (url) => {
+-            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+-            const data = await res.json();
+-            if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+-            if (!data.success) throw new Error(data.message || 'API returned success=false');
+-            return data;
+-          };
+-          const data = await doFetch(relativeUrl).catch(async (e) => { return await doFetch(fallbackUrl); });
+-          const apps = data.applications || [];
+-          const latest = apps.length > 0 ? apps[0] : null;
+-          // Only update application if something changed (simple shallow compare)
+-          if (JSON.stringify(latest) !== JSON.stringify(application)) {
+-            setApplication(latest);
+-          }
+-        } catch (err) {
+-          console.warn('Polling fetch error', err.message || err);
+-        }
+-      }, 5000);
+-    };
++  }, [user]);
+ 
+-    // Start polling after first fetch if application exists and not yet approved/assigned
+-    const maybeStart = () => {
+-      if (!application) return;
+-      const currentStatus = application?.status ?? application?.review_status ?? null;
+-      const isApprovedLocal = currentStatus === 'approved' || currentStatus === 'paid';
+-      const amountAssignedLocal = !!(application?.loan_amount || application?.amount || application?.requested_amount || application?.monthly_payment);
+-      if (!isApprovedLocal || (isApprovedLocal && !amountAssignedLocal)) {
+-        startPolling();
+-      }
+-    };
++  // Polling effect: start/stop polling based on `application` state so we don't rely on stale closures
++  useEffect(() => {
++    if (!user) return;
++    if (!application) return; // nothing to poll for
++
++    const currentStatus = application?.status ?? application?.review_status ?? null;
++    const isApprovedLocal = currentStatus === 'approved' || currentStatus === 'paid';
++    const amountAssignedLocal = !!(application?.loan_amount || application?.amount || application?.requested_amount || application?.monthly_payment);
+ 
+-    // small timeout to allow initial fetch to populate `application`
+-    const starter = setTimeout(maybeStart, 600);
++    // Only poll while waiting for approval or for amount assignment after approval
++    const shouldPoll = !isApprovedLocal || (isApprovedLocal && !amountAssignedLocal);
++    if (!shouldPoll) return; // no polling needed
++
++    let cancelled = false;
++    const intervalId = setInterval(async () => {
++      try {
++        const query = `user_id=${encodeURIComponent(user.user_id)}`;
++        const relativeUrl = `/api/loan-application/list?${query}`;
++        const fallbackUrl = `http://localhost:5001/api/loan-application/list?${query}`;
++        const doFetch = async (url) => {
++          const res = await fetch(url, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
++          const data = await res.json();
++          if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
++          if (!data.success) throw new Error(data.message || 'API returned success=false');
++          return data;
++        };
++        const data = await doFetch(relativeUrl).catch(async (e) => { return await doFetch(fallbackUrl); });
++        const apps = data.applications || [];
++        const latest = apps.length > 0 ? apps[0] : null;
++        if (cancelled) return;
++        // update application unconditionally to reflect latest DB state
++        setApplication(latest);
++      } catch (err) {
++        console.warn('Polling fetch error', err.message || err);
++      }
++    }, 5000);
+ 
+     return () => {
+-      clearTimeout(starter);
+-      if (intervalId) clearInterval(intervalId);
++      cancelled = true;
++      clearInterval(intervalId);
+     };
+-  }, [user]);
++  }, [user, application]);
+ 
+   // Step status helpers
+   const hasApplication = !!application;
+-- 
+2.51.1
+

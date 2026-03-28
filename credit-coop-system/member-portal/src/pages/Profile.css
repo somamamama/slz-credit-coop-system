@@ -1,0 +1,73 @@
+.profile-main {
+  padding: 2rem 0;
+}
+
+.profile-card {
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.profile-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-row label {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.form-row input {
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.form-actions {
+  margin-top: 0.75rem;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: #6a5cff;
+  color: white;
+}
+
+.btn-secondary {
+  background: #f0f0f0;
+  color: #333;
+}
+
+/* Ensure primary buttons on the Profile page use the lighter purple hover from the dashboard theme */
+.profile-card .btn-primary:hover,
+.profile-main .btn-primary:hover {
+  background: linear-gradient(90deg,#7b72ff,#9b80ff) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 20px rgba(123,114,255,0.18) !important;
+  transform: none !important;
+}
+
+/* Also ensure the secondary button used for 'Change password' gets the dashboard hover
+   appearance (some buttons on this page are btn-secondary by design). */
+.profile-card .btn-secondary:hover,
+.profile-main .btn-secondary:hover {
+  background: linear-gradient(90deg,#7b72ff,#9b80ff) !important;
+  color: #ffffff !important;
+  border-color: rgba(123,114,255,0.28) !important;
+  box-shadow: 0 8px 20px rgba(123,114,255,0.14) !important;
+  transform: none !important;
+}

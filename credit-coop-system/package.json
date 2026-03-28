@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "minimist": "^1.2.8",
+    "puppeteer": "^24.31.0"
+  }
+}

@@ -1,0 +1,161 @@
+From f7ec35257a1a32f8da7243d4d8496cbe17a09f77 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Sun, 23 Nov 2025 10:15:17 +0800
+Subject: [PATCH 04/37] style(reports): add Reports.css and import in
+ Reports.js
+
+---
+ staff-portal/src/pages/Reports.css | 130 +++++++++++++++++++++++++++++
+ staff-portal/src/pages/Reports.js  |   1 +
+ 2 files changed, 131 insertions(+)
+ create mode 100644 staff-portal/src/pages/Reports.css
+
+diff --git a/staff-portal/src/pages/Reports.css b/staff-portal/src/pages/Reports.css
+new file mode 100644
+index 0000000..ad6cca1
+--- /dev/null
++++ b/staff-portal/src/pages/Reports.css
+@@ -0,0 +1,130 @@
++/* Reports page specific styling */
++
++.reports-header {
++  display: flex;
++  justify-content: space-between;
++  align-items: center;
++  gap: 1rem;
++}
++
++.reports-controls {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 1rem;
++  align-items: center;
++}
++
++.reports-controls label {
++  display: flex;
++  flex-direction: column;
++  font-weight: 600;
++  color: var(--gray-700);
++  font-size: 0.95rem;
++}
++
++.reports-controls select,
++.reports-controls input[type="date"] {
++  padding: 0.5rem 0.75rem;
++  border-radius: 10px;
++  border: 1px solid var(--gray-200);
++  background: var(--white);
++  min-width: 160px;
++}
++
++.reports-action-group {
++  display: flex;
++  gap: 0.5rem;
++  align-items: center;
++}
++
++.reports-action-group .btn {
++  padding: 0.6rem 1rem;
++  font-weight: 700;
++  border-radius: 10px;
++}
++
++.reports-action-group .btn[disabled] {
++  opacity: 0.6;
++  cursor: not-allowed;
++}
++
++/* Card spacing for the preview */
++.reports-preview {
++  margin-top: 1rem;
++  padding: 1rem;
++}
++
++.reports-preview h3 {
++  margin: 0 0 0.75rem 0;
++  font-size: 1.1rem;
++  color: var(--gray-800);
++}
++
++/* Make table visually lighter and easier to read */
++.reports-table-container {
++  overflow: auto;
++  border-radius: 10px;
++  box-shadow: var(--card-shadow);
++  border: 1px solid var(--gray-200);
++  background: var(--white);
++}
++
++.reports-table-container table {
++  width: 100%;
++  border-collapse: collapse;
++}
++
++.reports-table-container th,
++.reports-table-container td {
++  padding: 0.75rem 1rem;
++  border-bottom: 1px solid var(--gray-100);
++  text-align: left;
++}
++
++.reports-table-container th {
++  background: linear-gradient(90deg, rgba(124,58,237,0.06), rgba(124,58,237,0.02));
++  color: var(--gray-700);
++  font-weight: 700;
++}
++
++.reports-stats {
++  display: flex;
++  gap: 1rem;
++  margin-top: 1rem;
++  flex-wrap: wrap;
++}
++
++.report-stat {
++  background: linear-gradient(135deg, rgba(124,58,237,0.06), rgba(167,139,250,0.03));
++  padding: 0.75rem 1rem;
++  border-radius: 10px;
++  min-width: 140px;
++  box-shadow: var(--card-shadow);
++}
++
++.report-stat .label {
++  font-size: 0.85rem;
++  color: var(--gray-700);
++}
++
++.report-stat .value {
++  font-size: 1.15rem;
++  font-weight: 800;
++  color: var(--primary-purple-dark);
++}
++
++/* Responsive tweaks */
++@media (max-width: 768px) {
++  .reports-controls {
++    gap: 0.5rem;
++  }
++
++  .reports-controls label {
++    min-width: 140px;
++  }
++
++  .report-stat {
++    min-width: 120px;
++    flex: 1 1 calc(50% - 1rem);
++  }
++}
+diff --git a/staff-portal/src/pages/Reports.js b/staff-portal/src/pages/Reports.js
+index ae08493..cb63323 100644
+--- a/staff-portal/src/pages/Reports.js
++++ b/staff-portal/src/pages/Reports.js
+@@ -1,4 +1,5 @@
+ import React, { useMemo, useState } from 'react';
++import './Reports.css';
+ 
+ // Helper: format date as YYYY-MM-DD
+ const fmt = (d) => d.toISOString().slice(0, 10);
+-- 
+2.51.1
+

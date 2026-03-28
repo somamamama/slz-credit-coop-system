@@ -1,0 +1,251 @@
+From f2f605f9f64538ea508142adf15ed07e6416be35 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Sun, 23 Nov 2025 10:10:12 +0800
+Subject: [PATCH 02/37] feat(reports): add automated dummy reports generation
+ UI with CSV download
+
+---
+ staff-portal/src/pages/Reports.js | 220 +++++++++++++++++++++++++++---
+ 1 file changed, 199 insertions(+), 21 deletions(-)
+
+diff --git a/staff-portal/src/pages/Reports.js b/staff-portal/src/pages/Reports.js
+index 1a989fc..bde96a6 100644
+--- a/staff-portal/src/pages/Reports.js
++++ b/staff-portal/src/pages/Reports.js
+@@ -1,34 +1,212 @@
+-import React from 'react';
++import React, { useMemo, useState } from 'react';
++
++// Helper: format date as YYYY-MM-DD
++const fmt = (d) => d.toISOString().slice(0, 10);
++
++// Generate dummy financial rows for a month range
++function generateFinancialData(startDate, endDate) {
++  const rows = [];
++  const s = new Date(startDate);
++  const e = new Date(endDate);
++  // create monthly buckets between s and e
++  const cur = new Date(s.getFullYear(), s.getMonth(), 1);
++  while (cur <= e) {
++    const monthLabel = cur.toLocaleString(undefined, { month: 'short', year: 'numeric' });
++    // dummy numbers
++    const deposits = Math.round(50000 + Math.random() * 150000);
++    const loans = Math.round(20000 + Math.random() * 120000);
++    const interest = Math.round(loans * (0.02 + Math.random() * 0.06));
++    const expenses = Math.round(5000 + Math.random() * 30000);
++    const net = deposits - loans + interest - expenses;
++    rows.push({ period: monthLabel, deposits, loans, interest, expenses, net });
++    cur.setMonth(cur.getMonth() + 1);
++  }
++  return rows;
++}
++
++// Generate dummy member rows for a date range
++function generateMemberData(startDate, endDate) {
++  const rows = [];
++  const s = new Date(startDate);
++  const e = new Date(endDate);
++  const totalDays = Math.ceil((e - s) / (1000 * 60 * 60 * 24)) + 1;
++  const count = Math.min(40, Math.max(6, Math.round(totalDays / 7)));
++  for (let i = 0; i < count; i++) {
++    const join = new Date(s.getTime() + Math.random() * (e - s));
++    rows.push({
++      id: `M-${1000 + i}`,
++      name: `Member ${i + 1}`,
++      joined: fmt(join),
++      shares: Math.round(1 + Math.random() * 50),
++      contribution: Math.round(1000 + Math.random() * 40000),
++    });
++  }
++  // sort by joined
++  rows.sort((a, b) => (a.joined > b.joined ? 1 : -1));
++  return rows;
++}
+ 
+ const Reports = () => {
++  const [reportType, setReportType] = useState('financial');
++  const [preset, setPreset] = useState('last_month');
++  const [from, setFrom] = useState(() => fmt(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)));
++  const [to, setTo] = useState(() => fmt(new Date()));
++  const [data, setData] = useState(null);
++
++  // compute from/to when preset changes
++  const applyPreset = (p) => {
++    const now = new Date();
++    let s, e;
++    if (p === 'this_month') {
++      s = new Date(now.getFullYear(), now.getMonth(), 1);
++      e = now;
++    } else if (p === 'last_month') {
++      s = new Date(now.getFullYear(), now.getMonth() - 1, 1);
++      e = new Date(now.getFullYear(), now.getMonth(), 0); // end of last month
++    } else if (p === 'last_3_months') {
++      s = new Date(now.getFullYear(), now.getMonth() - 3, 1);
++      e = now;
++    } else if (p === 'ytd') {
++      s = new Date(now.getFullYear(), 0, 1);
++      e = now;
++    } else {
++      s = new Date();
++      e = new Date();
++    }
++    setFrom(fmt(s));
++    setTo(fmt(e));
++    setPreset(p);
++  };
++
++  const handleGenerate = () => {
++    if (!from || !to) return;
++    if (new Date(from) > new Date(to)) {
++      alert('Invalid range: from must be <= to');
++      return;
++    }
++    if (reportType === 'financial') {
++      setData({ headers: ['Period', 'Deposits', 'Loans', 'Interest', 'Expenses', 'Net'], rows: generateFinancialData(from, to) });
++    } else {
++      setData({ headers: ['ID', 'Name', 'Joined', 'Shares', 'Contribution'], rows: generateMemberData(from, to) });
++    }
++  };
++
++  const downloadCSV = () => {
++    if (!data) return;
++    let csv = '';
++    csv += data.headers.join(',') + '\n';
++    data.rows.forEach((r) => {
++      if (reportType === 'financial') {
++        csv += [r.period, r.deposits, r.loans, r.interest, r.expenses, r.net].join(',') + '\n';
++      } else {
++        csv += [r.id, `"${r.name}"`, r.joined, r.shares, r.contribution].join(',') + '\n';
++      }
++    });
++    const blob = new Blob([csv], { type: 'text/csv' });
++    const url = URL.createObjectURL(blob);
++    const a = document.createElement('a');
++    a.href = url;
++    a.download = `${reportType}-report-${from}_to_${to}.csv`;
++    a.click();
++    URL.revokeObjectURL(url);
++  };
++
++  const preview = useMemo(() => data, [data]);
++
+   return (
+     <div className="page">
+       <div className="page-header">
+         <div className="page-title">
+-          <h1>Financial Reports</h1>
+-          <p>Generate and view financial reports and analytics</p>
++          <h1>Reports</h1>
++          <p>Generate automated financial and member reports (dummy data)</p>
+         </div>
+-        <button className="btn btn-primary">
+-          <span>📈</span>
+-          Generate Report
+-        </button>
+       </div>
+-      
+-      <div className="card">
+-        <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+-          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>📈</div>
+-          <h3>Financial Reports</h3>
+-          <p>This section will contain reporting features including:</p>
+-          <ul style={{ textAlign: 'left', display: 'inline-block', marginTop: '1rem' }}>
+-            <li>Monthly financial statements</li>
+-            <li>Member growth reports</li>
+-            <li>Loan portfolio analysis</li>
+-            <li>Deposit trends and analytics</li>
+-            <li>Profitability reports</li>
+-            <li>Regulatory compliance reports</li>
+-          </ul>
++
++      <div className="card" style={{ padding: '1rem' }}>
++        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
++          <label>
++            Report type
++            <br />
++            <select value={reportType} onChange={(e) => setReportType(e.target.value)}>
++              <option value="financial">Financial</option>
++              <option value="members">Members</option>
++            </select>
++          </label>
++
++          <label>
++            Preset
++            <br />
++            <select value={preset} onChange={(e) => applyPreset(e.target.value)}>
++              <option value="last_month">Last month</option>
++              <option value="this_month">This month</option>
++              <option value="last_3_months">Last 3 months</option>
++              <option value="ytd">Year to date</option>
++              <option value="custom">Custom range</option>
++            </select>
++          </label>
++
++          <label>
++            From
++            <br />
++            <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPreset('custom'); }} />
++          </label>
++
++          <label>
++            To
++            <br />
++            <input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPreset('custom'); }} />
++          </label>
++
++          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
++            <button className="btn btn-primary" onClick={handleGenerate}>Generate Report</button>
++            <button className="btn" onClick={() => { setData(null); }}>Clear</button>
++            <button className="btn" onClick={downloadCSV} disabled={!data}>Download CSV</button>
++          </div>
+         </div>
+       </div>
++
++      {preview ? (
++        <div className="card" style={{ marginTop: '1rem', overflowX: 'auto' }}>
++          <h3 style={{ marginTop: 0 }}>{reportType === 'financial' ? 'Financial report (preview)' : 'Member report (preview)'}</h3>
++          <table className="table" style={{ width: '100%', borderCollapse: 'collapse' }}>
++            <thead>
++              <tr>
++                {preview.headers.map((h) => (
++                  <th key={h} style={{ textAlign: 'left', padding: '0.5rem', borderBottom: '1px solid #ddd' }}>{h}</th>
++                ))}
++              </tr>
++            </thead>
++            <tbody>
++              {preview.rows.map((r, idx) => (
++                <tr key={idx}>
++                  {reportType === 'financial' ? (
++                    <>
++                      <td style={{ padding: '0.5rem' }}>{r.period}</td>
++                      <td style={{ padding: '0.5rem' }}>{r.deposits.toLocaleString()}</td>
++                      <td style={{ padding: '0.5rem' }}>{r.loans.toLocaleString()}</td>
++                      <td style={{ padding: '0.5rem' }}>{r.interest.toLocaleString()}</td>
++                      <td style={{ padding: '0.5rem' }}>{r.expenses.toLocaleString()}</td>
++                      <td style={{ padding: '0.5rem' }}>{r.net.toLocaleString()}</td>
++                    </>
++                  ) : (
++                    <>
++                      <td style={{ padding: '0.5rem' }}>{r.id}</td>
++                      <td style={{ padding: '0.5rem' }}>{r.name}</td>
++                      <td style={{ padding: '0.5rem' }}>{r.joined}</td>
++                      <td style={{ padding: '0.5rem' }}>{r.shares}</td>
++                      <td style={{ padding: '0.5rem' }}>{r.contribution.toLocaleString()}</td>
++                    </>
++                  )}
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        </div>
++      ) : (
++        <div className="card" style={{ marginTop: '1rem', padding: '2rem', textAlign: 'center' }}>
++          <p>No report generated yet — choose a preset or custom range and click <strong>Generate Report</strong>.</p>
++        </div>
++      )}
+     </div>
+   );
+ };
+-- 
+2.51.1
+

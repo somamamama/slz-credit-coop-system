@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300">
+  <!-- Outer ring -->
+  <circle cx="150" cy="150" r="145" fill="none" stroke="#4a1a2b" stroke-width="10"/>
+  
+  <!-- Inner burgundy circle -->
+  <circle cx="150" cy="150" r="130" fill="none" stroke="#6b2d42" stroke-width="15"/>
+  
+  <!-- Center purple gradient circle -->
+  <defs>
+    <radialGradient id="centerGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#c8a8d8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5a9c;stop-opacity:1" />
+    </radialGradient>
+  </defs>
+  <circle cx="150" cy="150" r="80" fill="url(#centerGradient)" stroke="#2c1810" stroke-width="3"/>
+  
+  <!-- Blue 'S' -->
+  <text x="120" y="175" font-family="serif" font-size="48" font-weight="bold" fill="#0066cc">S</text>
+  
+  <!-- Red 'L' -->
+  <text x="150" y="175" font-family="serif" font-size="48" font-weight="bold" fill="#cc0000">L</text>
+  
+  <!-- Blue 'Z' -->
+  <text x="180" y="175" font-family="serif" font-size="48" font-weight="bold" fill="#0066cc">Z</text>
+  
+  <!-- EST 2021 -->
+  <text x="150" y="200" font-family="sans-serif" font-size="14" font-weight="bold" fill="#0066cc" text-anchor="middle">EST 2021</text>
+  
+  <!-- Top text -->
+  <path id="topCurve" d="M 50 150 A 100 100 0 0 1 250 150" fill="none"/>
+  <text font-family="serif" font-size="20" font-weight="bold" fill="#2c1810">
+    <textPath href="#topCurve" startOffset="50%" text-anchor="middle">Sts. Louie &amp; Zehe</textPath>
+  </text>
+  
+  <!-- Bottom text -->
+  <path id="bottomCurve" d="M 250 150 A 100 100 0 0 1 50 150" fill="none"/>
+  <text font-family="serif" font-size="18" font-weight="bold" fill="#2c1810">
+    <textPath href="#bottomCurve" startOffset="50%" text-anchor="middle">Credit Cooperative</textPath>
+  </text>
+</svg>

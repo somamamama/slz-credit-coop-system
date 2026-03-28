@@ -1,0 +1,53 @@
+From 5fa9ce1b3bf937a4e7d14b22e3f467800aca22df Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Sun, 23 Nov 2025 10:13:29 +0800
+Subject: [PATCH 03/37] fix(reports): guard numeric fields and clear preview
+ when switching report type
+
+---
+ staff-portal/src/pages/Reports.js | 16 ++++++++--------
+ 1 file changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/staff-portal/src/pages/Reports.js b/staff-portal/src/pages/Reports.js
+index bde96a6..ae08493 100644
+--- a/staff-portal/src/pages/Reports.js
++++ b/staff-portal/src/pages/Reports.js
+@@ -127,7 +127,7 @@ const Reports = () => {
+           <label>
+             Report type
+             <br />
+-            <select value={reportType} onChange={(e) => setReportType(e.target.value)}>
++            <select value={reportType} onChange={(e) => { setReportType(e.target.value); setData(null); }}>
+               <option value="financial">Financial</option>
+               <option value="members">Members</option>
+             </select>
+@@ -182,19 +182,19 @@ const Reports = () => {
+                   {reportType === 'financial' ? (
+                     <>
+                       <td style={{ padding: '0.5rem' }}>{r.period}</td>
+-                      <td style={{ padding: '0.5rem' }}>{r.deposits.toLocaleString()}</td>
+-                      <td style={{ padding: '0.5rem' }}>{r.loans.toLocaleString()}</td>
+-                      <td style={{ padding: '0.5rem' }}>{r.interest.toLocaleString()}</td>
+-                      <td style={{ padding: '0.5rem' }}>{r.expenses.toLocaleString()}</td>
+-                      <td style={{ padding: '0.5rem' }}>{r.net.toLocaleString()}</td>
++                      <td style={{ padding: '0.5rem' }}>{(r.deposits ?? 0).toLocaleString()}</td>
++                      <td style={{ padding: '0.5rem' }}>{(r.loans ?? 0).toLocaleString()}</td>
++                      <td style={{ padding: '0.5rem' }}>{(r.interest ?? 0).toLocaleString()}</td>
++                      <td style={{ padding: '0.5rem' }}>{(r.expenses ?? 0).toLocaleString()}</td>
++                      <td style={{ padding: '0.5rem' }}>{(r.net ?? 0).toLocaleString()}</td>
+                     </>
+                   ) : (
+                     <>
+                       <td style={{ padding: '0.5rem' }}>{r.id}</td>
+                       <td style={{ padding: '0.5rem' }}>{r.name}</td>
+                       <td style={{ padding: '0.5rem' }}>{r.joined}</td>
+-                      <td style={{ padding: '0.5rem' }}>{r.shares}</td>
+-                      <td style={{ padding: '0.5rem' }}>{r.contribution.toLocaleString()}</td>
++                      <td style={{ padding: '0.5rem' }}>{r.shares ?? 0}</td>
++                      <td style={{ padding: '0.5rem' }}>{(r.contribution ?? 0).toLocaleString()}</td>
+                     </>
+                   )}
+                 </tr>
+-- 
+2.51.1
+

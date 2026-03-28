@@ -1,0 +1,38 @@
+From 5fbdfabb39c4ac7f243ba19fb90ff9730ddcd244 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Tue, 25 Nov 2025 21:19:39 +0800
+Subject: [PATCH 18/37] Reports: use ASCII 'PHP' prefix for PDF currency to
+ avoid missing glyphs; note font-embed option
+
+---
+ staff-portal/src/pages/Reports.js | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/staff-portal/src/pages/Reports.js b/staff-portal/src/pages/Reports.js
+index 271a698..ba3f8f4 100644
+--- a/staff-portal/src/pages/Reports.js
++++ b/staff-portal/src/pages/Reports.js
+@@ -63,11 +63,17 @@ const Reports = () => {
+   const [logoDataUrl, setLogoDataUrl] = useState(null);
+ 
+   const formatCurrencyPDF = (amount) => {
+-    // Format amount with Philippine peso symbol and no decimal digits for the PDF
++    // Format amount for the PDF. Many PDF fonts used by jsPDF don't render the
++    // '₱' glyph correctly, so use a reliable ASCII prefix 'PHP ' to ensure
++    // the symbol appears correctly in generated PDFs. If you prefer the
++    // actual '₱' glyph we can embed a font that supports it (larger change).
+     try {
+-      return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(amount ?? 0);
++      // use currency formatting but replace symbol with 'PHP '
++      const formatted = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(amount ?? 0);
++      // formatted may include the ₱ glyph; replace it with ASCII 'PHP '
++      return formatted.replace(/[^0-9.,\s\-]+/g, 'PHP ');
+     } catch (e) {
+-      return `₱${Number(amount || 0).toLocaleString()}`;
++      return `PHP ${Number(amount || 0).toLocaleString()}`;
+     }
+   };
+ 
+-- 
+2.51.1
+

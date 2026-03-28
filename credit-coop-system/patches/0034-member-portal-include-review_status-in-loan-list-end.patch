@@ -1,0 +1,63 @@
+From 8fbfbc0080ab6f3d4a7e07836449c3fd8230f4c3 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Wed, 26 Nov 2025 01:50:36 +0800
+Subject: [PATCH 34/37] member-portal: include review_status in loan list
+ endpoint so frontend sees staff approval
+
+---
+ member-portal/server/index.js | 40 ++++++++++++++++++-----------------
+ 1 file changed, 21 insertions(+), 19 deletions(-)
+
+diff --git a/member-portal/server/index.js b/member-portal/server/index.js
+index 042cc9e..0204b2f 100644
+--- a/member-portal/server/index.js
++++ b/member-portal/server/index.js
+@@ -1,24 +1,26 @@
+ // Load environment variables from .env when present (development convenience)
+ // This allows the server to pick up `jwtSecret`, `PAYMONGO_SECRET_KEY`, etc.
+-try {
+-  require('dotenv').config();
+-} catch (e) {
+-  // If dotenv is not installed, we silently continue; env vars can still be provided by the OS.
+-}
+-
+-const express = require('express');
+-const app = express();
+-const multer = require('multer');
+-const path = require('path');
+-const fs = require('fs');
+-const cors = require('cors');
+-const pool = require('./db_members'); // Import database connection
+-
+-// Utility: resolve PayMongo secret from env with optional fallbacks for local dev
+-function resolvePaymongoKey() {
+-  const keysTried = [];
+-  const primary = process.env.PAYMONGO_SECRET_KEY;
+-  keysTried.push(primary ? 'PAYMONGO_SECRET_KEY' : null);
++      SELECT
++        application_id,
++        user_id,
++        member_number,
++        loan_type,
++        membership_type,
++        first_name,
++        last_name,
++        status,
++        -- Include review_status (set by staff) so frontends can react to approvals
++        review_status,
++        submitted_at,
++        reviewed_at,
++        date_filed,
++        mobile_number,
++        email_address,
++        -- Some deployments use amount while older code referenced loan_amount.
++        -- Alias amount to loan_amount so the frontend that expects loan_amount continues to work.
++        amount AS loan_amount,
++        amount,
++        requested_amount
+   if (primary) return primary;
+ 
+   // Fallbacks (local/dev only) - prefer explicit server var
+-- 
+2.51.1
+

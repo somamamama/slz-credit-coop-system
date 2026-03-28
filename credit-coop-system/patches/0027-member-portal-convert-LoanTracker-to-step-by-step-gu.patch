@@ -1,0 +1,256 @@
+From 6f5acd7841e8ebceaaa727d2dab63b62934a402a Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Tue, 25 Nov 2025 22:28:33 +0800
+Subject: [PATCH 27/37] member-portal: convert LoanTracker to step-by-step
+ guide UI; add route
+
+---
+ member-portal/src/App.js               |  16 +--
+ member-portal/src/pages/LoanTracker.js | 132 +++++++++++++------------
+ 2 files changed, 78 insertions(+), 70 deletions(-)
+
+diff --git a/member-portal/src/App.js b/member-portal/src/App.js
+index c43ea89..b75bcde 100644
+--- a/member-portal/src/App.js
++++ b/member-portal/src/App.js
+@@ -72,14 +72,14 @@ const AppRoutes = () => {
+           </ProtectedRoute>
+         } 
+       />
+-      <Route 
+-        path="/loan-tracker" 
+-        element={
+-          <ProtectedRoute>
+-            <LoanTracker />
+-          </ProtectedRoute>
+-        }
+-      />
++         <Route 
++           path="/loan-tracker" 
++           element={
++             <ProtectedRoute>
++               <LoanTracker />
++             </ProtectedRoute>
++           }
++         />
+       <Route 
+         path="/payment" 
+         element={
+diff --git a/member-portal/src/pages/LoanTracker.js b/member-portal/src/pages/LoanTracker.js
+index 7f6b7d5..fba17bd 100644
+--- a/member-portal/src/pages/LoanTracker.js
++++ b/member-portal/src/pages/LoanTracker.js
+@@ -8,14 +8,13 @@ const formatCurrency = (amount) => {
+ };
+ 
+ const computeLoanDetails = (app) => {
+-  // Accept either loan_amount, amount, or requested_amount
+   const raw = app.loan_amount ?? app.amount ?? app.requested_amount ?? 0;
+   const amount = Number(raw) || 0;
+-  const months = (app.loan_type === 'quick' || app.loanType === 'quick') ? 6 : 12;
++  const months = app.duration_months || (app.loan_type === 'quick' || app.loanType === 'quick' ? 6 : 12);
+   const serviceFee = amount * 0.03;
+   const shareCapital = amount * 0.03;
+   const insurance = (amount * months) / 1000;
+-  const annualInterestRate = 0.12; // assumed
++  const annualInterestRate = app.interest_rate ?? 0.12;
+   const monthlyInterestRate = annualInterestRate / 12;
+   const n = months;
+   const P = amount;
+@@ -25,18 +24,7 @@ const computeLoanDetails = (app) => {
+     monthlyPayment = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+   }
+   const netProceeds = amount - serviceFee - shareCapital - insurance;
+-
+-  return {
+-    amount,
+-    months,
+-    serviceFee,
+-    shareCapital,
+-    insurance,
+-    annualInterestRate,
+-    monthlyInterestRate,
+-    monthlyPayment,
+-    netProceeds
+-  };
++  return { amount, months, serviceFee, shareCapital, insurance, annualInterestRate, monthlyInterestRate, monthlyPayment, netProceeds };
+ };
+ 
+ const LoanTracker = () => {
+@@ -47,7 +35,6 @@ const LoanTracker = () => {
+ 
+   useEffect(() => {
+     if (!user) return;
+-
+     const fetchApps = async () => {
+       setLoading(true);
+       setError(null);
+@@ -57,48 +44,58 @@ const LoanTracker = () => {
+       const fallbackUrl = `http://localhost:5001/api/loan-application/list?${query}`;
+ 
+       const doFetch = async (url) => {
+-        const res = await fetch(url, {
+-          headers: {
+-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+-          }
+-        });
+-        // Try to parse JSON safely
++        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+         let data;
+-        try {
+-          data = await res.json();
+-        } catch (parseErr) {
+-          const text = await res.text().catch(() => '<no body>');
+-          throw new Error(`Invalid JSON from ${url} - status ${res.status} - body: ${text}`);
+-        }
+-        if (!res.ok) {
+-          throw new Error(data?.message || `HTTP ${res.status} from ${url}`);
+-        }
+-        if (!data.success) {
+-          throw new Error(data.message || `API returned success=false from ${url}`);
+-        }
++        try { data = await res.json(); } catch (parseErr) { const text = await res.text().catch(() => '<no body>'); throw new Error(`Invalid JSON from ${url} - status ${res.status} - body: ${text}`); }
++        if (!res.ok) throw new Error(data?.message || `HTTP ${res.status} from ${url}`);
++        if (!data.success) throw new Error(data.message || `API returned success=false from ${url}`);
+         return data;
+       };
+ 
+       try {
+-        // Try relative URL first (works when backend is proxied or same-origin)
+-        const data = await doFetch(relativeUrl).catch(async (e) => {
+-          console.warn('Relative fetch failed, trying fallback:', e.message);
+-          return await doFetch(fallbackUrl);
+-        });
+-
++        const data = await doFetch(relativeUrl).catch(async (e) => { console.warn('Relative fetch failed, trying fallback:', e.message); return await doFetch(fallbackUrl); });
+         const apps = data.applications || [];
+         setApplication(apps.length > 0 ? apps[0] : null);
+       } catch (err) {
+         console.error('Failed to fetch loan applications', err);
+         setError('Error fetching loan application details');
+-      } finally {
+-        setLoading(false);
+-      }
++      } finally { setLoading(false); }
+     };
+-
+     fetchApps();
+   }, [user]);
+ 
++  // Step status helpers
++  const hasApplication = !!application;
++  const status = application?.status ?? application?.review_status ?? application?.status;
++  const isApproved = status === 'approved' || status === 'paid';
++  const amountAssigned = !!(application?.loan_amount || application?.amount || application?.requested_amount || application?.monthly_payment);
++
++  const steps = [
++    {
++      id: 1,
++      title: 'Submit Loan Application',
++      description: 'Complete and submit your loan application form. This must be done first.',
++      done: hasApplication,
++      action: hasApplication ? null : { label: 'Apply for a Loan', href: '/loans' }
++    },
++    {
++      id: 2,
++      title: 'Application Review & Approval',
++      description: 'Loan officers will review your application. You must wait until it is approved to proceed.',
++      done: isApproved,
++      inProgress: hasApplication && !isApproved,
++      waitMessage: hasApplication ? 'Waiting for staff review and approval...' : 'Submit your application to begin review.'
++    },
++    {
++      id: 3,
++      title: 'Loan Amount Assignment & Disbursement',
++      description: 'Once approved, an amount will be set and the repayment schedule will be prepared. This step completes after amount is assigned and disbursed.',
++      done: isApproved && amountAssigned,
++      inProgress: isApproved && !amountAssigned,
++      waitMessage: isApproved ? 'Waiting for admin to assign final loan amount...' : 'This step starts after approval.'
++    }
++  ];
++
+   return (
+     <div className="loan-tracker-page">
+       <Header />
+@@ -106,23 +103,17 @@ const LoanTracker = () => {
+         <div className="container">
+           <div className="page-header">
+             <h1>📍 Loan Tracker</h1>
+-            <p>Track the status of your loan application and see calculated amounts when a loan amount is assigned.</p>
++            <p>Follow the steps below to see where your loan application is in the process.</p>
+           </div>
+ 
+-          {loading && (
+-            <div className="card">
+-              <p>Loading your loan application...</p>
+-            </div>
+-          )}
++          {loading && <div className="card"><p>Loading your loan application...</p></div>}
+ 
+-          {!loading && error && (
+-            <div className="card status-message error">❌ {error}</div>
+-          )}
++          {!loading && error && <div className="card status-message error">❌ {error}</div>}
+ 
+           {!loading && !application && !error && (
+             <div className="card">
+               <h3>No loan application found</h3>
+-              <p>You do not have any submitted loan applications. If you'd like to apply, go to the Loan Application page.</p>
++              <p>You haven't submitted a loan application yet. Start by submitting one.</p>
+               <a href="/loans" className="btn btn-primary">Apply for a Loan</a>
+             </div>
+           )}
+@@ -130,11 +121,33 @@ const LoanTracker = () => {
+           {!loading && application && (
+             <div className="card">
+               <h2>Application #{application.application_id}</h2>
+-              <p><strong>Status:</strong> {application.status ?? application.review_status ?? 'N/A'}</p>
++              <p><strong>Current status:</strong> {status || 'N/A'}</p>
+               <p><strong>Submitted:</strong> {new Date(application.submitted_at || application.date_filed || application.created_at).toLocaleString()}</p>
+ 
+-              {/* Amount and calculations */}
+-              {(application.loan_amount || application.amount || application.requested_amount) ? (
++              <div className="steps-list" style={{ marginTop: '1rem' }}>
++                {steps.map(step => (
++                  <div key={step.id} className={`step-item ${step.done ? 'done' : (step.inProgress ? 'in-progress' : 'pending')}`} style={{ padding: '1rem', borderRadius: 8, marginBottom: 12, background: step.done ? '#e6ffed' : (step.inProgress ? '#fff9e6' : '#f5f6f7') }}>
++                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
++                      <div>
++                        <h4 style={{ margin: 0 }}>{step.id}. {step.title}</h4>
++                        <div style={{ color: '#555' }}>{step.description}</div>
++                      </div>
++                      <div>
++                        {step.done ? <span style={{ color: '#0a7a3d', fontWeight: 'bold' }}>Completed ✅</span>
++                          : step.inProgress ? <span style={{ color: '#a36b00', fontWeight: 'bold' }}>In progress ⏳</span>
++                          : <span style={{ color: '#666' }}>Pending</span>}
++                      </div>
++                    </div>
++
++                    <div style={{ marginTop: 8 }}>
++                      {step.action && <a href={step.action.href} className="btn btn-primary">{step.action.label}</a>}
++                      {!step.done && step.waitMessage && <div style={{ marginTop: 8, color: '#666' }}>{step.waitMessage}</div>}
++                    </div>
++                  </div>
++                ))}
++              </div>
++
++              {(application.loan_amount || application.amount || application.requested_amount) && (
+                 (() => {
+                   const d = computeLoanDetails(application);
+                   return (
+@@ -152,13 +165,8 @@ const LoanTracker = () => {
+                     </div>
+                   );
+                 })()
+-              ) : (
+-                <div style={{ marginTop: '1rem' }}>
+-                  <p>No loan amount has been assigned yet. Please check back later or contact support.</p>
+-                </div>
+               )}
+ 
+-              {/* Optional reviewer comments */}
+               {application.reviewer_comments && (
+                 <div style={{ marginTop: '1rem' }}>
+                   <h5>Reviewer Comments</h5>
+-- 
+2.51.1
+

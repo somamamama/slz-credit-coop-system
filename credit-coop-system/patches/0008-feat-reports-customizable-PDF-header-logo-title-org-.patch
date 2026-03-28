@@ -1,0 +1,94 @@
+From 865b2e82231912a8f1e6821f462c2fdb80229d49 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Sun, 23 Nov 2025 10:24:54 +0800
+Subject: [PATCH 08/37] feat(reports): customizable PDF header (logo, title,
+ org) and include header in PDF
+
+---
+ staff-portal/src/pages/Reports.js | 59 +++++++++++++++++++++++++++----
+ 1 file changed, 52 insertions(+), 7 deletions(-)
+
+diff --git a/staff-portal/src/pages/Reports.js b/staff-portal/src/pages/Reports.js
+index e28f29b..545100f 100644
+--- a/staff-portal/src/pages/Reports.js
++++ b/staff-portal/src/pages/Reports.js
+@@ -53,6 +53,9 @@ const Reports = () => {
+   const [from, setFrom] = useState(() => fmt(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)));
+   const [to, setTo] = useState(() => fmt(new Date()));
+   const [data, setData] = useState(null);
++  const [orgName, setOrgName] = useState('Credit Coop System');
++  const [reportTitle, setReportTitle] = useState('Automated Report');
++  const [logoUrl, setLogoUrl] = useState('');
+ 
+   // compute from/to when preset changes
+   const applyPreset = (p) => {
+@@ -118,17 +121,59 @@ const Reports = () => {
+       const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+       const margin = 40;
+       let y = 60;
+-      doc.setFontSize(14);
+-      doc.text(`${reportType === 'financial' ? 'Financial' : 'Member'} Report`, margin, y);
+-      doc.setFontSize(10);
++      // Header: optional logo, org name, title, generated timestamp
++      const pageWidth = doc.internal.pageSize.getWidth();
++      const rightX = pageWidth - margin;
++
++      // try to load logo (if provided) and convert to dataURL
++      let logoDataUrl = null;
++      if (logoUrl) {
++        try {
++          const res = await fetch(logoUrl);
++          const blob = await res.blob();
++          logoDataUrl = await new Promise((resolve, reject) => {
++            const fr = new FileReader();
++            fr.onload = () => resolve(fr.result);
++            fr.onerror = reject;
++            fr.readAsDataURL(blob);
++          });
++        } catch (e) {
++          // ignore logo loading errors
++          console.warn('Failed to load logo URL for PDF header', e);
++          logoDataUrl = null;
++        }
++      }
++
++      // draw logo left if available
++      if (logoDataUrl) {
++        try {
++          doc.addImage(logoDataUrl, 'PNG', margin, 36, 48, 48);
++        } catch (e) {
++          // addImage may fail for unknown formats; ignore
++          console.warn('addImage failed', e);
++        }
++      }
++
++      doc.setFontSize(12);
++      doc.setFont('helvetica', 'bold');
++      const titleText = reportTitle || (reportType === 'financial' ? 'Financial Report' : 'Member Report');
++      // center title
++      const titleWidth = doc.getTextWidth(titleText);
++      doc.text(titleText, (pageWidth - titleWidth) / 2, y);
++
++      doc.setFontSize(9);
++      doc.setFont('helvetica', 'normal');
++      const generatedText = `Generated: ${new Date().toLocaleString()}`;
++      const genWidth = doc.getTextWidth(generatedText);
++      doc.text(generatedText, rightX - genWidth, y);
++
+       y += 18;
+       doc.text(`Period: ${from} — ${to}`, margin, y);
+       y += 18;
+ 
+-      // draw headers
+-      const colX = [];
+-      const pageWidth = doc.internal.pageSize.getWidth();
+-      const usableWidth = pageWidth - margin * 2;
++  // draw headers
++  const colX = [];
++  const usableWidth = pageWidth - margin * 2;
+       const headers = data.headers;
+       const colWidth = usableWidth / headers.length;
+       headers.forEach((h, i) => colX.push(margin + i * colWidth));
+-- 
+2.51.1
+

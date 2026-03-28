@@ -1,0 +1,28 @@
+From ef6300015366d325124064fd053e8c9be20e78c7 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Tue, 25 Nov 2025 22:35:01 +0800
+Subject: [PATCH 28/37] member-portal: alias amount as loan_amount in list
+ endpoint to avoid missing column error
+
+---
+ member-portal/server/index.js | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/member-portal/server/index.js b/member-portal/server/index.js
+index 36b5bdf..30d5b22 100644
+--- a/member-portal/server/index.js
++++ b/member-portal/server/index.js
+@@ -302,7 +302,9 @@ app.get('/api/loan-application/list', async (req, res) => {
+         date_filed,
+         mobile_number,
+         email_address,
+-        loan_amount,
++  -- Some deployments use amount while older code referenced loan_amount.
++  -- Alias amount to loan_amount so the frontend that expects loan_amount continues to work.
++        amount AS loan_amount,
+         amount,
+         requested_amount
+       FROM loan_applications
+-- 
+2.51.1
+

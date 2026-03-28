@@ -1,0 +1,82 @@
+-- convert_application_id_to_sequence_postgres.sql
+-- Safely convert an existing integer PK column `application_id` on
+-- table `loan_applications` to use a sequence (auto-generated IDs).
+--
+-- IMPORTANT: Backup your DB before running. Test on staging first.
+-- Usage (psql):
+--   psql -h HOST -U USER -d DBNAME -f db-migrations/convert_application_id_to_sequence_postgres.sql
+
+-- Adjust the table/column names below if your schema is different.
+
+BEGIN;
+
+-- Configuration (change if your table/column names differ)
+DO $$
+DECLARE
+  tbl_schema text := 'public';
+  tbl_name text := 'loan_applications';
+  col_name text := 'application_id';
+  seq_name text := tbl_name || '_' || col_name || '_seq';
+  dup_count int := 0;
+  null_count int := 0;
+  max_id bigint := 0;
+BEGIN
+  -- Basic safety checks
+  EXECUTE format('SELECT COUNT(*) FROM %I.%I WHERE %I IS NULL', tbl_schema, tbl_name, col_name) INTO null_count;
+  IF null_count > 0 THEN
+    RAISE NOTICE 'Found % rows with NULL % in %', null_count, col_name, tbl_name;
+    -- we'll fill NULLs using the sequence later, so this is OK (not fatal)
+  END IF;
+
+  -- Check for duplicates (fatal - stop the migration if duplicates exist)
+  EXECUTE format('SELECT COUNT(*) FROM (SELECT %I FROM %I.%I WHERE %I IS NOT NULL GROUP BY %I HAVING COUNT(*)>1) t', col_name, tbl_schema, tbl_name, col_name, col_name) INTO dup_count;
+  IF dup_count > 0 THEN
+    RAISE EXCEPTION 'Found % duplicate % values in %, resolve duplicates before running this script', dup_count, col_name, tbl_name;
+  END IF;
+
+  -- ensure column is integer-compatible (if not, this may fail)
+  -- You can uncomment and adjust the following if you need to convert type:
+  -- EXECUTE format('ALTER TABLE %I.%I ALTER COLUMN %I TYPE bigint USING (%I::bigint)', tbl_schema, tbl_name, col_name, col_name);
+
+  -- Create sequence if not exists
+  IF NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind = 'S' AND n.nspname = tbl_schema AND c.relname = seq_name) THEN
+    EXECUTE format('CREATE SEQUENCE %I.%I', tbl_schema, seq_name);
+    RAISE NOTICE 'Created sequence %', seq_name;
+  ELSE
+    RAISE NOTICE 'Sequence % already exists, will reuse', seq_name;
+  END IF;
+
+  -- Fill NULL application_id values using the sequence
+  IF null_count > 0 THEN
+    EXECUTE format('UPDATE %I.%I SET %I = nextval(%L) WHERE %I IS NULL', tbl_schema, tbl_name, col_name, tbl_schema || '.' || seq_name, col_name);
+    RAISE NOTICE 'Filled NULL % values using sequence %', col_name, seq_name;
+  END IF;
+
+  -- Make sequence owned by the column
+  EXECUTE format('ALTER SEQUENCE %I.%I OWNED BY %I.%I.%I', tbl_schema, seq_name, tbl_schema, tbl_name, col_name);
+
+  -- Set default on the column to use the sequence
+  EXECUTE format('ALTER TABLE %I.%I ALTER COLUMN %I SET DEFAULT nextval(%L)', tbl_schema, tbl_name, col_name, tbl_schema || '.' || seq_name);
+
+  -- Set sequence current value to MAX(application_id) so nextval returns max+1
+  EXECUTE format('SELECT COALESCE(MAX(%I),0) FROM %I.%I', col_name, tbl_schema, tbl_name) INTO max_id;
+  EXECUTE format('SELECT setval(%L, %s, true)', tbl_schema || '.' || seq_name, max_id);
+  RAISE NOTICE 'Set sequence % current value to % (max existing id)', seq_name, max_id;
+
+  -- Optionally, make the column NOT NULL
+  EXECUTE format('ALTER TABLE %I.%I ALTER COLUMN %I SET NOT NULL', tbl_schema, tbl_name, col_name);
+  RAISE NOTICE 'Set % on %.%', col_name, tbl_schema, tbl_name;
+
+END$$;
+
+COMMIT;
+
+-- After this script:
+-- - New inserts that omit application_id will receive values from the sequence.
+-- - Existing NULL application_id rows (if any) have been assigned sequence values.
+-- - Sequence is set so nextval returns max(existing id) + 1.
+
+-- Verification queries:
+-- SELECT column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='loan_applications' AND column_name='application_id';
+-- SELECT last_value, is_called FROM public.loan_applications_application_id_seq;
+-- INSERT INTO loan_applications (/* required cols except application_id */) VALUES (...) RETURNING application_id;

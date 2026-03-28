@@ -1,0 +1,33 @@
+{
+  "name": "staff-portal-server",
+  "version": "1.0.0",
+  "description": "Backend server for Credit Cooperative Staff Portal",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "setup-db": "node setup-db.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.0",
+    "multer": "^2.0.2",
+    "pg": "^8.16.3",
+    "socket.io": "^4.8.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  },
+  "keywords": [
+    "credit-cooperative",
+    "staff-portal",
+    "backend"
+  ],
+  "author": "",
+  "license": "MIT"
+}

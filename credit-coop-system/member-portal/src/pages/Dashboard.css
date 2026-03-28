@@ -1,0 +1,176 @@
+/* Dashboard - responsive, clean, professional styles */
+
+.dashboard {
+  min-height: 100vh;
+  background: var(--gradient-background, #f5f7fb);
+  color: var(--gray-900);
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+}
+
+.dashboard-main {
+  padding: 1.25rem 0 3rem;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Card base */
+.card {
+  background: var(--white, #fff);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(28, 37, 55, 0.06);
+  border: 1px solid rgba(16,24,40,0.04);
+}
+
+/* layout grid helpers */
+.grid { display: grid; gap: 1rem; }
+.grid-2 { grid-template-columns: 1fr; }
+@media (min-width: 880px) { .grid-2 { grid-template-columns: 1fr 420px; } }
+
+/* Top / Accounts */
+.accounts-section { margin: 1.25rem 0; }
+.account-card { padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.account-header { display:flex; align-items:center; gap:0.75rem }
+.account-icon { width:48px;height:48px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.25rem }
+.account-icon.savings { background:#e6f8ef }
+.account-info h3 { font-size:1rem; margin:0; font-weight:700 }
+.account-number { color:var(--gray-600); font-size:0.9rem }
+.account-balance { margin-top:0.5rem }
+.balance-amount { font-size:1.4rem; font-weight:800; color:var(--success-green) }
+.balance-label { color:var(--gray-600); font-size:0.875rem }
+
+/* Loan card */
+.loan-card { padding:1rem }
+.loan-header { display:flex; gap:1rem; align-items:center }
+.loan-icon { width:48px;height:48px;border-radius:10px;background:#fff7e6;display:flex;align-items:center;justify-content:center }
+.loan-info h3 { margin:0; font-size:1rem; font-weight:700 }
+.loan-info p { margin:0; color:var(--gray-600); font-size:0.9rem }
+.loan-balance { margin-top:0.75rem }
+.loan-action { margin-top:1rem }
+.btn-primary { background: linear-gradient(90deg,#6a5cff,#9b6bff); color:white; border:none; padding:0.8rem 1rem; border-radius:8px; cursor:pointer }
+.btn-primary[disabled] { opacity:0.6; cursor:not-allowed }
+/* Hover style matching the 'Save changes' appearance: lighter purple and soft purple shadow */
+.btn-primary:hover {
+  background: linear-gradient(90deg,#7b72ff,#9b80ff);
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(123,114,255,0.18);
+  transform: none; /* keep button steady instead of translating down */
+}
+
+/* Stronger override scoped to the dashboard in case global styles are loaded after this file.
+   This ensures the hover uses the lighter purple + soft glow on the member portal pages. */
+.dashboard .btn-primary:hover {
+  background: linear-gradient(90deg,#7b72ff,#9b80ff) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 20px rgba(123,114,255,0.22) !important;
+  transform: none !important;
+}
+/* Quick actions */
+.quick-actions-card { padding:1rem }
+.quick-actions-card h3 { margin:0 0 0.75rem 0; font-size:1rem }
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  /* ensure every grid cell has the same row height so boxes are uniform */
+  grid-auto-rows: 92px;
+}
+@media (min-width:640px) {
+  .quick-actions-grid { grid-template-columns: repeat(4, 1fr); }
+}
+.quick-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; /* center label and icon vertically */
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: var(--white);
+  border: 1px solid rgba(15,23,42,0.04);
+  transition: all .18s ease;
+  height: 100%; /* fill the grid cell so all buttons match the grid row height */
+  text-align: center;
+}
+.quick-action-btn:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(16,24,40,0.06) }
+.action-icon { width:44px; height:44px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.25rem }
+.action-label { font-weight:600; font-size:0.92rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+
+/* Recent activity */
+.activity-list { display:flex; flex-direction:column; gap:0.75rem }
+.activity-item { display:flex; gap:0.75rem; align-items:center; padding:0.75rem }
+.activity-icon { width:40px;height:40px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center }
+.activity-info h4 { margin:0; font-size:0.98rem; font-weight:700 }
+.activity-info p { margin:0; color:var(--gray-600); font-size:0.85rem }
+.activity-amount { margin-left:auto; font-weight:800 }
+
+/* approved banner */
+.approved-banner { margin-bottom:0.75rem; display:flex; flex-direction:column; gap:0.5rem }
+.approved-item { background:#eefdf3; border:1px solid #d6f5df; padding:0.5rem 0.75rem; border-radius:8px }
+
+/* Mobile-first responsive tweaks */
+@media (max-width:639px) {
+  .container { padding: 0 0.75rem }
+  .dashboard-main { padding-top:0.75rem }
+  .balance-amount { font-size:1.2rem }
+  .account-header { gap:0.5rem }
+  /* On small screens, stack the activity header so the refresh button moves below the title */
+  .activity-header { flex-direction: column; align-items: flex-start; }
+}
+
+@media (min-width:640px) and (max-width:880px) {
+  .grid-2 { grid-template-columns: 1fr 320px }
+}
+
+@media (min-width:880px) {
+  .dashboard-main { padding-top:1.5rem }
+  .container { max-width:1200px }
+}
+  
+  .welcome-text h1 {
+    font-size: 1.5rem;
+  }
+  
+  .account-header {
+    gap: 0.75rem;
+  }
+  
+  .account-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1.2rem;
+  }
+  
+  .balance-amount {
+    font-size: 1.5rem;
+  }
+  
+  .quick-actions-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  /* Activity header - on larger screens place title on left and actions (Refresh) on the right */
+  @media (min-width:640px) {
+    .activity-header {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+  }
+  
+  .activity-item {
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+  
+  .activity-icon {
+    width: 35px;
+    height: 35px;
+    font-size: 1rem;
+  }
+

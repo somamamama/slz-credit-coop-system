@@ -1,0 +1,1597 @@
+From 4719b17406cf6908a608c1ddf8532e2c8d6c4ece Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Mon, 24 Nov 2025 10:47:55 +0800
+Subject: [PATCH 12/37] Auto: save workspace changes (auto-commit)
+
+---
+ PAYMONGO_INTEGRATION.md                       |   2 +-
+ member-portal/.env.example                    |   6 +-
+ member-portal/package.json                    |   1 +
+ member-portal/server/index.js                 | 297 +++++++++++++++++-
+ .../001_add_outstanding_and_payments.sql      |  40 +++
+ member-portal/server/package-lock.json        |   2 +-
+ member-portal/server/package.json             |   2 +-
+ member-portal/src/App.js                      |   6 +
+ member-portal/src/pages/Dashboard.js          |  14 +-
+ member-portal/src/pages/Payment.js            | 106 ++-----
+ member-portal/src/pages/PaymentSuccess.js     |  85 +++--
+ staff-portal/server/index.js                  |   2 +
+ staff-portal/server/routes/accounts.js        |  54 ++++
+ staff-portal/src/App.js                       |  42 +++
+ staff-portal/src/pages/AdminDashboard.js      | 135 ++++++++
+ .../src/pages/CreditInvestigatorDashboard.js  |  74 +----
+ staff-portal/src/pages/LoanAmounts.js         | 156 +++++++++
+ staff-portal/src/pages/SavingsSetup.js        | 102 ++++++
+ staff-portal/src/utils/permissions.js         |  66 +++-
+ 19 files changed, 994 insertions(+), 198 deletions(-)
+ create mode 100644 member-portal/server/migrations/001_add_outstanding_and_payments.sql
+ create mode 100644 staff-portal/server/routes/accounts.js
+ create mode 100644 staff-portal/src/pages/LoanAmounts.js
+ create mode 100644 staff-portal/src/pages/SavingsSetup.js
+
+diff --git a/PAYMONGO_INTEGRATION.md b/PAYMONGO_INTEGRATION.md
+index e3af02d..ed4016a 100644
+--- a/PAYMONGO_INTEGRATION.md
++++ b/PAYMONGO_INTEGRATION.md
+@@ -17,7 +17,7 @@ The payment system has been rewritten to use PayMongo's secure payment processin
+ **Test API Keys (Currently Configured):**
+ ```
+ Public Key: pk_test_Ff7ikQQHTa3HjoAnuBZPDo4t
+-Secret Key: sk_test_REDACTED (Currently in use)
++Secret Key: sk_test_*************** (redacted - do NOT commit live secrets)
+ ```
+ 
+ ⚠️ **Important:** These are test keys for development. For production, you'll need to:
+diff --git a/member-portal/.env.example b/member-portal/.env.example
+index 73fce01..cb8cb95 100644
+--- a/member-portal/.env.example
++++ b/member-portal/.env.example
+@@ -1 +1,5 @@
+-REACT_APP_PAYMONGO_SECRET_KEY=your_paymongo_secret_key_here
+\ No newline at end of file
++# Server-side PayMongo secret key (keep this on the backend only)
++PAYMONGO_SECRET_KEY=your_paymongo_secret_key_here
++
++# Optional: public key for client-side usage (if needed). Do NOT store secret in frontend env.
++PAYMONGO_PUBLIC_KEY=your_paymongo_public_key_here
+\ No newline at end of file
+diff --git a/member-portal/package.json b/member-portal/package.json
+index b458af2..d1f3f0b 100644
+--- a/member-portal/package.json
++++ b/member-portal/package.json
+@@ -2,6 +2,7 @@
+   "name": "member-portal",
+   "version": "0.1.0",
+   "private": true,
++  "proxy": "http://localhost:5001",
+   "dependencies": {
+     "@testing-library/dom": "^10.4.0",
+     "@testing-library/jest-dom": "^6.6.3",
+diff --git a/member-portal/server/index.js b/member-portal/server/index.js
+index 48d7721..a6c4b11 100644
+--- a/member-portal/server/index.js
++++ b/member-portal/server/index.js
+@@ -1,3 +1,11 @@
++// Load environment variables from .env when present (development convenience)
++// This allows the server to pick up `jwtSecret`, `PAYMONGO_SECRET_KEY`, etc.
++try {
++  require('dotenv').config();
++} catch (e) {
++  // If dotenv is not installed, we silently continue; env vars can still be provided by the OS.
++}
++
+ const express = require('express');
+ const app = express();
+ const multer = require('multer');
+@@ -6,6 +14,23 @@ const fs = require('fs');
+ const cors = require('cors');
+ const pool = require('./db_members'); // Import database connection
+ 
++// Utility: resolve PayMongo secret from env with optional fallbacks for local dev
++function resolvePaymongoKey() {
++  const keysTried = [];
++  const primary = process.env.PAYMONGO_SECRET_KEY;
++  keysTried.push(primary ? 'PAYMONGO_SECRET_KEY' : null);
++  if (primary) return primary;
++
++  // Fallbacks (local/dev only) - prefer explicit server var
++  const alt = process.env.PAYMONGO_TEST_KEY || process.env.REACT_APP_PAYMONGO_SECRET_KEY || null;
++  if (alt) {
++    console.warn('Using fallback PayMongo key from environment (RECOMMENDED: set PAYMONGO_SECRET_KEY).');
++    return alt;
++  }
++
++  return null;
++}
++
+ //middlewares
+ app.use(express.json());
+ app.use(cors());
+@@ -459,25 +484,287 @@ app.post('/api/payment/reference-upload', paymentUpload.single('reference_image'
+   }
+ });
+ 
++// Endpoint to confirm a payment (recommended: called by client after redirect OR by a webhook handler)
++// Expects JSON body: { payment_intent_id?, checkout_session_id?, application_id, member_number }
++app.post('/api/payments/confirm', async (req, res) => {
++  const { payment_intent_id, checkout_session_id, application_id, member_number } = req.body || {};
++
++  if (!payment_intent_id && !checkout_session_id) {
++    return res.status(400).json({ success: false, message: 'payment_intent_id or checkout_session_id required' });
++  }
++
++  const PAYMONGO_KEY = resolvePaymongoKey();
++  if (!PAYMONGO_KEY) {
++    console.error('PAYMONGO_SECRET_KEY not set in server environment. Set PAYMONGO_SECRET_KEY env var.');
++    return res.status(500).json({ success: false, message: 'Server misconfiguration: missing PayMongo secret. Set PAYMONGO_SECRET_KEY on the server.' });
++  }
++
++  try {
++    // Use server-side fetch to retrieve the payment details from PayMongo for verification
++    const authHeader = 'Basic ' + Buffer.from(`${PAYMONGO_KEY}:`).toString('base64');
++    let paymongoResp;
++    if (payment_intent_id) {
++      paymongoResp = await fetch(`https://api.paymongo.com/v1/payment_intents/${payment_intent_id}`, {
++        method: 'GET', headers: { Authorization: authHeader }
++      });
++    } else {
++      paymongoResp = await fetch(`https://api.paymongo.com/v1/checkout_sessions/${checkout_session_id}`, {
++        method: 'GET', headers: { Authorization: authHeader }
++      });
++    }
++
++    if (!paymongoResp.ok) {
++      const txt = await paymongoResp.text();
++      console.error('Failed to fetch PayMongo payment:', paymongoResp.status, txt);
++      return res.status(502).json({ success: false, message: 'Failed to verify payment with payment provider' });
++    }
++
++    const payData = await paymongoResp.json();
++    // PayMongo amounts are in cents (integer)
++    const attributes = payData.data && payData.data.attributes ? payData.data.attributes : {};
++    const providerAmountCents = attributes.amount || 0;
++    const providerCurrency = attributes.currency || 'PHP';
++    const providerStatus = attributes.status || attributes.payment_status || 'unknown';
++    const providerId = payData.data.id || null;
++    const paidAt = attributes.paid_at ? new Date(attributes.paid_at) : (attributes.updated_at ? new Date(attributes.updated_at) : new Date());
++
++    // Only process succeeded/paid status (adjust condition if provider uses a different status value)
++    if (!['succeeded', 'paid', 'paid_out'].includes(String(providerStatus).toLowerCase())) {
++      return res.status(400).json({ success: false, message: 'Payment not in a completed state', status: providerStatus });
++    }
++
++    const paidAmount = Number(providerAmountCents) / 100.0;
++
++    // Persist payment and deduct outstanding_balance atomically
++    const client = await pool.connect();
++    try {
++      await client.query('BEGIN');
++
++      // Insert payment record
++      const insertPayment = `INSERT INTO payments (payment_provider_id, application_id, member_number, amount, currency, status, paid_at, raw_payload)
++        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`;
++      const insertValues = [providerId, application_id || null, member_number || null, paidAmount, providerCurrency, providerStatus, paidAt, JSON.stringify(payData)];
++      const insertResult = await client.query(insertPayment, insertValues);
++
++        console.log('Inserted payment record id=', insertResult.rows[0].id, 'providerId=', providerId, 'amount=', paidAmount);
++
++      // Deduct outstanding balance
++      const updateQuery = `UPDATE loan_applications
++        SET outstanding_balance = GREATEST(COALESCE(outstanding_balance, 0) - $1, 0)
++        WHERE application_id = $2
++        RETURNING application_id, outstanding_balance, review_status`;
++      const updateResult = await client.query(updateQuery, [paidAmount, application_id]);
++
++  console.log('Updated loan application result rows=', updateResult.rows);
++
++      if (updateResult.rows.length === 0) {
++        // No loan found to apply payment to — rollback and return error
++        await client.query('ROLLBACK');
++        return res.status(404).json({ success: false, message: 'Loan application not found for given application_id' });
++      }
++
++      const newBalance = updateResult.rows[0].outstanding_balance;
++      const appId = updateResult.rows[0].application_id;
++
++      // Optionally mark loan as paid if balance is zero
++      if (Number(newBalance) <= 0) {
++        await client.query(`UPDATE loan_applications SET review_status = 'paid' WHERE application_id = $1`, [appId]);
++      }
++
++      await client.query('COMMIT');
++
++      // Emit or log event here if you have sockets wired up (left as a TODO)
++
++      return res.json({ success: true, message: 'Payment recorded and applied', payment_id: insertResult.rows[0].id, application_id: appId, outstanding_balance: newBalance });
++    } catch (txErr) {
++      await client.query('ROLLBACK');
++      console.error('Transaction error applying payment:', txErr);
++      return res.status(500).json({ success: false, message: 'Failed to record payment' });
++    } finally {
++      client.release();
++    }
++  } catch (err) {
++    console.error('Error confirming payment:', err);
++    return res.status(500).json({ success: false, message: 'Internal server error during payment confirmation' });
++  }
++});
++
++// Create a payment intent and checkout session via server (uses server-side secret)
++app.post('/api/payments/create', async (req, res) => {
++  const { amount_in_cents, payment_method, success_url, cancel_url, application_id, member_number } = req.body || {};
++  const PAYMONGO_KEY = resolvePaymongoKey();
++  if (!PAYMONGO_KEY) {
++    console.error('PAYMONGO_SECRET_KEY not set. Set PAYMONGO_SECRET_KEY on the server.');
++    return res.status(500).json({ success: false, message: 'Server misconfiguration: missing PayMongo secret. Set PAYMONGO_SECRET_KEY on the server.' });
++  }
++
++  if (!amount_in_cents || !payment_method) {
++    return res.status(400).json({ success: false, message: 'amount_in_cents and payment_method are required' });
++  }
++
++  try {
++    const authHeader = 'Basic ' + Buffer.from(`${PAYMONGO_KEY}:`).toString('base64');
++
++    // Ensure success_url and cancel_url include application identifiers so the client can tie the redirect
++    function appendQueryParams(url, params) {
++      if (!url) return url;
++      const hasQs = url.includes('?');
++      const parts = [];
++      for (const k in params) {
++        if (params[k] !== null && params[k] !== undefined) {
++          parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(params[k]))}`);
++        }
++      }
++      if (parts.length === 0) return url;
++      return `${url}${hasQs ? '&' : '?'}${parts.join('&')}`;
++    }
++
++    const successUrlFinal = appendQueryParams(success_url || `${process.env.CLIENT_ORIGIN || ''}/payment-success`, { application_id, member_number });
++    const cancelUrlFinal = appendQueryParams(cancel_url || `${process.env.CLIENT_ORIGIN || ''}/payment`, { application_id, member_number });
++
++    // Create payment intent
++    const piPayload = {
++      data: {
++        type: 'payment_intent',
++        attributes: {
++          amount: amount_in_cents,
++          currency: 'PHP',
++          description: 'Credit Cooperative Payment',
++          payment_method_allowed: [payment_method],
++          capture_type: 'automatic',
++          statement_descriptor: 'Credit Coop Payment'
++        }
++      }
++    };
++
++    const piResp = await fetch('https://api.paymongo.com/v1/payment_intents', {
++      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: authHeader }, body: JSON.stringify(piPayload)
++    });
++
++    if (!piResp.ok) {
++      const txt = await piResp.text();
++      console.error('PayMongo payment_intent creation failed:', txt);
++      return res.status(502).json({ success: false, message: 'Failed to create payment intent' });
++    }
++
++    const piData = await piResp.json();
++    const paymentIntentId = piData.data && piData.data.id;
++
++    // Create checkout session using the final URLs that include application identifiers
++    const checkoutPayload = {
++      data: {
++        type: 'checkout_session',
++        attributes: {
++          payment_intent_id: paymentIntentId,
++          success_url: successUrlFinal,
++          cancel_url: cancelUrlFinal,
++          line_items: [
++            { name: 'Credit Cooperative Payment', amount: amount_in_cents, currency: 'PHP', quantity: 1 }
++          ],
++          payment_method_types: [payment_method],
++          description: 'Payment to Credit Cooperative'
++        }
++      }
++    };
++
++    const csResp = await fetch('https://api.paymongo.com/v1/checkout_sessions', {
++      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: authHeader }, body: JSON.stringify(checkoutPayload)
++    });
++
++    if (!csResp.ok) {
++      const txt = await csResp.text();
++      console.error('PayMongo checkout_sessions creation failed:', txt);
++      return res.status(502).json({ success: false, message: 'Failed to create checkout session' });
++    }
++
++    const csData = await csResp.json();
++    const checkoutUrl = csData.data?.attributes?.checkout_url || null;
++
++    return res.json({ success: true, checkout_url: checkoutUrl, payment_intent_id: paymentIntentId, raw: { payment_intent: piData, checkout: csData } });
++  } catch (err) {
++    console.error('Error creating payment via PayMongo:', err);
++    return res.status(500).json({ success: false, message: 'Internal server error' });
++  }
++});
++
++// Get payment details (server-side) to avoid exposing secret in the client
++app.get('/api/payments/details', async (req, res) => {
++  const { payment_intent_id, checkout_session_id } = req.query || {};
++  const PAYMONGO_KEY = resolvePaymongoKey();
++  if (!PAYMONGO_KEY) return res.status(500).json({ success: false, message: 'Server misconfiguration: missing PayMongo secret. Set PAYMONGO_SECRET_KEY on the server.' });
++
++  try {
++    const authHeader = 'Basic ' + Buffer.from(`${PAYMONGO_KEY}:`).toString('base64');
++    let resp;
++    if (payment_intent_id) {
++      resp = await fetch(`https://api.paymongo.com/v1/payment_intents/${payment_intent_id}`, { headers: { Authorization: authHeader } });
++    } else if (checkout_session_id) {
++      resp = await fetch(`https://api.paymongo.com/v1/checkout_sessions/${checkout_session_id}`, { headers: { Authorization: authHeader } });
++    } else {
++      return res.status(400).json({ success: false, message: 'payment_intent_id or checkout_session_id required' });
++    }
++
++    if (!resp.ok) {
++      const txt = await resp.text();
++      console.error('Failed fetching payment details:', txt);
++      return res.status(502).json({ success: false, message: 'Failed to fetch payment details' });
++    }
++
++    const data = await resp.json();
++    return res.json({ success: true, data });
++  } catch (err) {
++    console.error('Error fetching payment details:', err);
++    return res.status(500).json({ success: false, message: 'Internal error' });
++  }
++});
++
+ // Restore original `/api/user` route
+ app.get('/api/user', async (req, res) => {
+   try {
++    console.log('Incoming /api/user request, req.user=', req.user);
++
++    // Try to resolve JWT from either custom 'token' header or standard Authorization: Bearer <token>
++    let jwtToken = req.header('token');
++    if (!jwtToken) {
++      const authHeader = req.header('authorization') || req.header('Authorization');
++      if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
++        jwtToken = authHeader.split(' ')[1];
++      }
++    }
++
++    let userIdFromToken = req.user || null;
++    if (!userIdFromToken) {
++      if (!jwtToken) {
++        console.warn('/api/user: no token provided');
++        return res.status(401).json({ success: false, message: 'No token provided' });
++      }
++      try {
++        const jwt = require('jsonwebtoken');
++        const jwtSecret = process.env.jwtSecret || 'default_jwt_secret_for_development_only_change_in_production';
++        const payload = jwt.verify(jwtToken, jwtSecret);
++        userIdFromToken = payload.user;
++      } catch (err) {
++        console.error('Token verification failed:', err.message || err);
++        return res.status(401).json({ success: false, message: 'Invalid token' });
++      }
++    }
++
+     const userResult = await pool.query(
+       "SELECT user_id, user_name, user_email, member_number FROM member_users WHERE user_id = $1",
+-      [req.user]
++      [userIdFromToken]
+     );
+     const user = userResult.rows[0];
+-
++    console.log('/api/user query result user=', user);
+     if (!user) {
+       console.log('No user found for user_id:', req.user);
+       return res.status(404).json({ success: false, message: 'User not found' });
+     }
+ 
+-    // Fetch loan data
++    // Fetch loan data (include outstanding_balance so frontend can show remaining balance)
+     const loanResult = await pool.query(
+-      `SELECT amount, duration_months, review_status, application_id, monthly_payment
++      `SELECT amount, duration_months, review_status, application_id, monthly_payment, outstanding_balance
+        FROM loan_applications
+-       WHERE member_number = $1 AND review_status = 'approved'
++       WHERE member_number = $1 AND review_status IN ('approved','paid')
+        ORDER BY submitted_at DESC LIMIT 1`,
+       [user.member_number]
+     );
+diff --git a/member-portal/server/migrations/001_add_outstanding_and_payments.sql b/member-portal/server/migrations/001_add_outstanding_and_payments.sql
+new file mode 100644
+index 0000000..6924197
+--- /dev/null
++++ b/member-portal/server/migrations/001_add_outstanding_and_payments.sql
+@@ -0,0 +1,40 @@
++-- Migration: add outstanding_balance to loan_applications and create payments table
++-- Run this against your member-portal database (psql) before enabling server-side payment confirmation.
++
++BEGIN;
++
++-- Add outstanding_balance column (if not exists)
++ALTER TABLE IF EXISTS loan_applications
++ADD COLUMN IF NOT EXISTS outstanding_balance DECIMAL(15,2) DEFAULT 0;
++
++-- If there is a loan_amount or amount column, initialize outstanding_balance from it for existing rows
++DO $$
++BEGIN
++	IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loan_applications' AND column_name='loan_amount') THEN
++		EXECUTE 'UPDATE loan_applications SET outstanding_balance = COALESCE(outstanding_balance, loan_amount, 0) WHERE outstanding_balance IS NULL OR outstanding_balance = 0';
++	ELSIF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loan_applications' AND column_name='amount') THEN
++		EXECUTE 'UPDATE loan_applications SET outstanding_balance = COALESCE(outstanding_balance, amount, 0) WHERE outstanding_balance IS NULL OR outstanding_balance = 0';
++	END IF;
++END$$;
++
++-- Create payments table to record incoming payments
++CREATE TABLE IF NOT EXISTS payments (
++	id SERIAL PRIMARY KEY,
++	payment_provider_id VARCHAR(255),
++	application_id INTEGER,
++	member_number VARCHAR(50),
++	amount DECIMAL(15,2) NOT NULL,
++	currency VARCHAR(10) DEFAULT 'PHP',
++	status VARCHAR(50),
++	paid_at TIMESTAMP,
++	raw_payload JSONB,
++	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
++	FOREIGN KEY (application_id) REFERENCES loan_applications(application_id) ON DELETE SET NULL
++);
++
++CREATE INDEX IF NOT EXISTS idx_payments_application_id ON payments(application_id);
++CREATE INDEX IF NOT EXISTS idx_payments_payment_provider_id ON payments(payment_provider_id);
++
++COMMIT;
++
++-- End of migration
+diff --git a/member-portal/server/package-lock.json b/member-portal/server/package-lock.json
+index 11b2c59..9915ce8 100644
+--- a/member-portal/server/package-lock.json
++++ b/member-portal/server/package-lock.json
+@@ -11,7 +11,7 @@
+       "dependencies": {
+         "bcrypt": "^5.1.1",
+         "cors": "^2.8.5",
+-        "dotenv": "^16.3.1",
++        "dotenv": "^16.6.1",
+         "express": "^4.21.2",
+         "jsonwebtoken": "^9.0.2",
+         "multer": "^1.4.5-lts.1",
+diff --git a/member-portal/server/package.json b/member-portal/server/package.json
+index 063fbdc..e5365e2 100644
+--- a/member-portal/server/package.json
++++ b/member-portal/server/package.json
+@@ -11,7 +11,7 @@
+   "dependencies": {
+     "bcrypt": "^5.1.1",
+     "cors": "^2.8.5",
+-    "dotenv": "^16.3.1",
++    "dotenv": "^16.6.1",
+     "express": "^4.21.2",
+     "jsonwebtoken": "^9.0.2",
+     "multer": "^1.4.5-lts.1",
+diff --git a/member-portal/src/App.js b/member-portal/src/App.js
+index 0a2a2ad..e5841bf 100644
+--- a/member-portal/src/App.js
++++ b/member-portal/src/App.js
+@@ -7,6 +7,7 @@ import LoanApplication from './pages/LoanApplication';
+ import Payment from './pages/Payment';
+ import PaymentDues from './pages/PaymentDues';
+ import PaymentHistory from './pages/PaymentHistory';
++import PaymentSuccess from './pages/PaymentSuccess';
+ import './App.css';
+ // removed toastify
+ 
+@@ -78,6 +79,11 @@ const AppRoutes = () => {
+           </ProtectedRoute>
+         } 
+       />
++      {/* Payment success page: render directly so redirect from gateway with query params is handled */}
++      <Route
++        path="/payment-success"
++        element={<PaymentSuccess />}
++      />
+       <Route 
+         path="/payment-dues" 
+         element={
+diff --git a/member-portal/src/pages/Dashboard.js b/member-portal/src/pages/Dashboard.js
+index ffbc747..3936f0d 100644
+--- a/member-portal/src/pages/Dashboard.js
++++ b/member-portal/src/pages/Dashboard.js
+@@ -13,7 +13,7 @@ const Dashboard = () => {
+   useEffect(() => {
+     const fetchUserData = async () => {
+       try {
+-        const response = await fetch('http://localhost:5001/api/user', {
++        const response = await fetch('/api/user', {
+           method: 'GET',
+           headers: {
+             'Authorization': `Bearer ${localStorage.getItem('token')}`
+@@ -83,6 +83,8 @@ const Dashboard = () => {
+     return <div>Loading...</div>; // Display loading indicator
+   }
+ 
++  const displayedBalance = user?.loan?.outstanding_balance ?? user?.loan?.amount ?? 0;
++
+   return (
+     <div className="dashboard">
+       <Header />
+@@ -123,9 +125,9 @@ const Dashboard = () => {
+                 <div className="loan-info">
+                   <h3>Loan Balance</h3>
+                   <p>
+-                    {user?.loan?.amount
+-                      ? `Loan Amount: ${formatCurrency(user.loan.amount)}`
+-                      : 'No active loan'}
++                      {user?.loan
++                        ? `Loan Amount: ${formatCurrency(displayedBalance)}`
++                        : 'No active loan'}
+                     <br />
+                     {user?.loan?.duration_months
+                       ? `Loan Term: ${user.loan.duration_months} months`
+@@ -134,11 +136,11 @@ const Dashboard = () => {
+                 </div>
+               </div>
+               <div className="loan-balance">
+-                <span className="balance-amount">{formatCurrency(user?.loan?.amount || 0)}</span>
++                <span className="balance-amount">{formatCurrency(displayedBalance)}</span>
+                 <span className="balance-label">Loan balance</span>
+               </div>
+               <div className="loan-action">
+-                {user?.loan?.amount > 0 ? (
++                {displayedBalance > 0 ? (
+                   <button className="btn btn-primary btn-lg" disabled>
+                     🚫 Loan Application Disabled<br />
+                     <span>You already have an active loan.</span>
+diff --git a/member-portal/src/pages/Payment.js b/member-portal/src/pages/Payment.js
+index eeba3dc..f97d757 100644
+--- a/member-portal/src/pages/Payment.js
++++ b/member-portal/src/pages/Payment.js
+@@ -14,7 +14,7 @@ const Payment = () => {
+   const navigate = useNavigate();
+ 
+   // PayMongo API key should be stored in environment variables
+-// Add REACT_APP_PAYMONGO_SECRET_KEY to your .env file
++  // PayMongo secret must be set server-side (PAYMONGO_SECRET_KEY). The client should not contain secrets.
+ 
+   useEffect(() => {
+     if (user && user.loan && user.loan.monthly_payment) {
+@@ -37,97 +37,51 @@ const Payment = () => {
+       // Convert amount to cents (PayMongo expects amounts in centavos)
+       const amountInCents = Math.round(parseFloat(amount) * 100);
+ 
+-      const paymentIntentData = {
+-        data: {
+-          type: 'payment_intent',
+-          attributes: {
+-            amount: amountInCents,
+-            currency: 'PHP',
+-            description: 'Credit Cooperative Payment',
+-            payment_method_allowed: [paymentMethod],
+-            capture_type: 'automatic',
+-            statement_descriptor: 'Credit Coop Payment'
+-          }
+-        }
++      // Call server to create payment intent + checkout session (server holds secret)
++      const payload = {
++        amount_in_cents: amountInCents,
++        payment_method: paymentMethod,
++        success_url: `${window.location.origin}/payment-success`,
++        cancel_url: `${window.location.origin}/payment`,
++        application_id: user?.loan?.application_id || null,
++        member_number: user?.member_number || user?.member_number || null
+       };
+ 
+-      const response = await fetch('https://api.paymongo.com/v1/payment_intents', {
++      const resp = await fetch('/api/payments/create', {
+         method: 'POST',
+-        headers: {
+-          'Content-Type': 'application/json',
+-          'Authorization': `Basic ${btoa(process.env.REACT_APP_PAYMONGO_SECRET_KEY + ':')}`
+-        },
+-        body: JSON.stringify(paymentIntentData)
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify(payload)
+       });
+ 
+-      const data = await response.json();
+-
+-      if (!response.ok) {
+-        throw new Error(data.errors?.[0]?.detail || 'Failed to create payment intent');
++      // Parse response safely: handle non-JSON (HTML error pages) to give a readable message
++      const contentType = resp.headers.get('content-type') || '';
++      let data = null;
++      if (contentType.includes('application/json')) {
++        data = await resp.json();
++      } else {
++        const text = await resp.text();
++        // If response is not JSON, treat as error and surface text
++        throw new Error(text || 'Unexpected non-JSON response from server');
+       }
+ 
+-      // Create Checkout Session
+-      await createCheckoutSession(data.data.id, amountInCents);
+-    } catch (error) {
+-      setSubmitStatus({ type: 'error', message: error.message || 'Payment creation failed.' });
+-      setIsProcessing(false);
+-    }
+-  };
+-
+-  // Create PayMongo Checkout Session
+-  const createCheckoutSession = async (paymentIntentId, amountInCents) => {
+-    try {
+-      const checkoutData = {
+-        data: {
+-          type: 'checkout_session',
+-          attributes: {
+-            payment_intent_id: paymentIntentId,
+-            success_url: `${window.location.origin}/payment-success`,
+-            cancel_url: `${window.location.origin}/payment`,
+-            line_items: [
+-              {
+-                name: 'Credit Cooperative Payment',
+-                amount: amountInCents,
+-                currency: 'PHP',
+-                quantity: 1
+-              }
+-            ],
+-            payment_method_types: [paymentMethod],
+-            description: 'Payment to Credit Cooperative'
+-          }
+-        }
+-      };
+-
+-      const response = await fetch('https://api.paymongo.com/v1/checkout_sessions', {
+-        method: 'POST',
+-        headers: {
+-          'Content-Type': 'application/json',
+-          'Authorization': `Basic ${btoa(process.env.REACT_APP_PAYMONGO_SECRET_KEY + ':')}`
+-        },
+-        body: JSON.stringify(checkoutData)
+-      });
+-
+-      const data = await response.json();
+-
+-      if (!response.ok) {
+-        throw new Error(data.errors?.[0]?.detail || 'Failed to create checkout session');
++      if (!resp.ok) {
++        throw new Error(data.message || 'Failed to create payment session');
+       }
+ 
+-      setCheckoutUrl(data.data.attributes.checkout_url);
++      // Redirect to checkout URL provided by server
++      setCheckoutUrl(data.checkout_url);
+       setSubmitStatus({ type: 'success', message: 'Payment session created! Redirecting...' });
+-      
+-      // Redirect to PayMongo checkout page
+       setTimeout(() => {
+-        window.location.href = data.data.attributes.checkout_url;
+-      }, 1500);
+-
++        if (data.checkout_url) window.location.href = data.checkout_url;
++      }, 700);
+     } catch (error) {
+-      setSubmitStatus({ type: 'error', message: error.message || 'Checkout creation failed.' });
+-    } finally {
++      setSubmitStatus({ type: 'error', message: error.message || 'Payment creation failed.' });
+       setIsProcessing(false);
+     }
+   };
+ 
++  // Checkout session creation is handled on the server (/api/payments/create).
++
+   return (
+     <div className="payment-page">
+       <Header />
+diff --git a/member-portal/src/pages/PaymentSuccess.js b/member-portal/src/pages/PaymentSuccess.js
+index bd0878c..6d6a683 100644
+--- a/member-portal/src/pages/PaymentSuccess.js
++++ b/member-portal/src/pages/PaymentSuccess.js
+@@ -7,14 +7,16 @@ const PaymentSuccess = () => {
+   const [searchParams] = useSearchParams();
+   const [paymentDetails, setPaymentDetails] = useState(null);
+   const [loading, setLoading] = useState(true);
++  const [confirmResult, setConfirmResult] = useState(null);
+   const navigate = useNavigate();
+ 
+-  // PayMongo API key should be stored in environment variables
+-  // Add REACT_APP_PAYMONGO_SECRET_KEY to your .env file
++  // Payment details and verification are performed server-side to avoid exposing secret keys.
+ 
+   useEffect(() => {
+     const paymentIntentId = searchParams.get('payment_intent_id');
+     const checkoutSessionId = searchParams.get('checkout_session_id');
++    const applicationId = searchParams.get('application_id');
++    const memberNumber = searchParams.get('member_number');
+ 
+     if (paymentIntentId) {
+       fetchPaymentDetails(paymentIntentId);
+@@ -27,16 +29,43 @@ const PaymentSuccess = () => {
+ 
+   const fetchPaymentDetails = async (paymentIntentId) => {
+     try {
+-      const response = await fetch(`https://api.paymongo.com/v1/payment_intents/${paymentIntentId}`, {
+-        headers: {
+-          'Authorization': `Basic ${btoa(process.env.REACT_APP_PAYMONGO_SECRET_KEY + ':')}`
++      // Fetch payment details from server (server will use secret)
++      const response = await fetch(`/api/payments/details?payment_intent_id=${encodeURIComponent(paymentIntentId)}`);
++      const ct = response.headers.get('content-type') || '';
++      let json = null;
++      if (ct.includes('application/json')) {
++        json = await response.json();
++      } else {
++        const txt = await response.text();
++        console.warn('Non-JSON response fetching payment details:', txt);
++        setLoading(false);
++        return;
++      }
++      if (response.ok && json.success && json.data) {
++        // The server returns paymongo payload at json.data
++        setPaymentDetails(json.data.data);
++        // Notify server to record and apply payment (wait for result)
++        try {
++          const appId = searchParams.get('application_id') || null;
++          const mNum = searchParams.get('member_number') || null;
++          const confResp = await fetch('/api/payments/confirm', {
++            method: 'POST',
++            headers: { 'Content-Type': 'application/json' },
++            body: JSON.stringify({ payment_intent_id: json.data.data.id, application_id: appId, member_number: mNum })
++          });
++          const confCt = confResp.headers.get('content-type') || '';
++          let confJson = null;
++          if (confCt.includes('application/json')) confJson = await confResp.json();
++          if (confResp.ok && confJson && confJson.success) {
++            setConfirmResult({ success: true, data: confJson });
++          } else {
++            setConfirmResult({ success: false, data: confJson || { message: 'Unknown error' }, status: confResp.status });
++            console.warn('Payment confirmation returned non-success:', confJson || await confResp.text());
++          }
++        } catch (err) {
++          console.warn('Server payment confirmation failed:', err);
++          setConfirmResult({ success: false, error: String(err) });
+         }
+-      });
+-
+-      const data = await response.json();
+-      
+-      if (response.ok) {
+-        setPaymentDetails(data.data);
+       }
+     } catch (error) {
+       console.error('Error fetching payment details:', error);
+@@ -47,16 +76,19 @@ const PaymentSuccess = () => {
+ 
+   const fetchCheckoutSessionDetails = async (checkoutSessionId) => {
+     try {
+-      const response = await fetch(`https://api.paymongo.com/v1/checkout_sessions/${checkoutSessionId}`, {
+-        headers: {
+-          'Authorization': `Basic ${btoa(process.env.REACT_APP_PAYMONGO_SECRET_KEY + ':')}`
+-        }
+-      });
+-
+-      const data = await response.json();
+-      
+-      if (response.ok && data.data.attributes.payment_intent_id) {
+-        await fetchPaymentDetails(data.data.attributes.payment_intent_id);
++      const response = await fetch(`/api/payments/details?checkout_session_id=${encodeURIComponent(checkoutSessionId)}`);
++      const ct = response.headers.get('content-type') || '';
++      let json = null;
++      if (ct.includes('application/json')) {
++        json = await response.json();
++      } else {
++        const txt = await response.text();
++        console.warn('Non-JSON response fetching checkout session details:', txt);
++        setLoading(false);
++        return;
++      }
++      if (response.ok && json.success && json.data && json.data.data?.attributes?.payment_intent_id) {
++        await fetchPaymentDetails(json.data.data.attributes.payment_intent_id);
+       } else {
+         setLoading(false);
+       }
+@@ -67,7 +99,12 @@ const PaymentSuccess = () => {
+   };
+ 
+   const handleGoToDashboard = () => {
++    // If we successfully applied the payment, navigate and reload so dashboard fetches updated loan data
+     navigate('/dashboard', { replace: true });
++    if (confirmResult && confirmResult.success) {
++      // force reload to ensure latest user/loan data
++      setTimeout(() => window.location.reload(), 300);
++    }
+   };
+ 
+   const handleMakeAnotherPayment = () => {
+@@ -148,6 +185,12 @@ const PaymentSuccess = () => {
+               </button>
+             </div>
+ 
++            {confirmResult && (
++              <div className={`status-message ${confirmResult.success ? 'success' : 'error'}`} style={{marginTop:12}}>
++                {confirmResult.success ? 'Payment applied to your loan successfully.' : `Payment not applied: ${confirmResult.data?.message || confirmResult.error || 'unknown'}`}
++              </div>
++            )}
++
+             <div className="receipt-note">
+               <p>
+                 📧 A receipt has been sent to your email address. 
+diff --git a/staff-portal/server/index.js b/staff-portal/server/index.js
+index d93be0d..57af434 100644
+--- a/staff-portal/server/index.js
++++ b/staff-portal/server/index.js
+@@ -21,6 +21,8 @@ app.use('/api/loan-review', require('./routes/loanReview'));
+ // payment reference routes
+ app.use('/api/payments', require('./routes/payments'));
+ app.use('/api/user-management', require('./routes/userManagement'));
++// accounts (savings/checking) routes
++app.use('/api/accounts', require('./routes/accounts'));
+ 
+ // invoice routes
+ app.use('/api/invoices', require('./routes/invoices'));
+diff --git a/staff-portal/server/routes/accounts.js b/staff-portal/server/routes/accounts.js
+new file mode 100644
+index 0000000..451ebdf
+--- /dev/null
++++ b/staff-portal/server/routes/accounts.js
+@@ -0,0 +1,54 @@
++const express = require('express');
++const router = express.Router();
++const staffAuthorize = require('../middleware/authorization');
++const { Pool } = require('pg');
++
++const membersPool = new Pool({
++  user: 'postgres',
++  password: 'password',
++  host: 'localhost',
++  database: 'slz_coop_staff',
++  port: 5432
++});
++
++// Ensure member_accounts table exists (best-effort)
++async function ensureAccountsTable() {
++  try {
++    await membersPool.query(`
++      CREATE TABLE IF NOT EXISTS member_accounts (
++        account_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
++        member_number VARCHAR(50) NOT NULL,
++        account_type VARCHAR(50) NOT NULL,
++        balance NUMERIC(18,2) DEFAULT 0,
++        created_at TIMESTAMP DEFAULT NOW()
++      )
++    `);
++  } catch (e) {
++    console.warn('Could not ensure member_accounts table:', e.message || e);
++  }
++}
++ensureAccountsTable();
++
++// Create a savings (or other) account for a member
++router.post('/create', staffAuthorize, async (req, res) => {
++  try {
++    const { member_number, initial_deposit = 0, account_type = 'savings' } = req.body || {};
++    if (!member_number) return res.status(400).json({ success: false, message: 'member_number required' });
++
++    // Verify member exists
++    const mRes = await membersPool.query('SELECT member_number FROM member_users WHERE member_number = $1', [member_number]);
++    if (mRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Member not found' });
++
++    const insert = await membersPool.query(
++      `INSERT INTO member_accounts (member_number, account_type, balance) VALUES ($1, $2, $3) RETURNING *`,
++      [member_number, account_type, Number(initial_deposit) || 0]
++    );
++
++    return res.json({ success: true, account: insert.rows[0] });
++  } catch (err) {
++    console.error('Error creating account:', err);
++    return res.status(500).json({ success: false, message: 'Failed to create account' });
++  }
++});
++
++module.exports = router;
+diff --git a/staff-portal/src/App.js b/staff-portal/src/App.js
+index 2e66d81..d6fc686 100644
+--- a/staff-portal/src/App.js
++++ b/staff-portal/src/App.js
+@@ -18,6 +18,8 @@ import CreateInvoice from './pages/CreateInvoice';
+ import Reports from './pages/Reports';
+ import Settings from './pages/Settings';
+ import ImportDashboard from './pages/ImportDashboard';
++import LoanAmounts from './pages/LoanAmounts';
++import SavingsSetup from './pages/SavingsSetup';
+ import './App.css';
+ import UserManagement from './components/UserManagement';
+ import MembershipApplications from './components/MembershipApplications';
+@@ -371,6 +373,26 @@ function App() {
+                 )
+               } 
+             />
++              <Route 
++                path="/loan-amounts" 
++                element={
++                  isAuthenticated ? (
++                    <div className="staff-portal">
++                      <Header setAuth={setAuth} />
++                      <div className="portal-content">
++                        <Sidebar />
++                        <main className="main-content">
++                          <ProtectedRoute requiredRoute="/loan-amounts">
++                            <LoanAmounts />
++                          </ProtectedRoute>
++                        </main>
++                      </div>
++                    </div>
++                  ) : (
++                    <Navigate to="/login" replace />
++                  )
++                } 
++              />
+             <Route 
+               path="/credit-investigator" 
+               element={
+@@ -391,6 +413,26 @@ function App() {
+                 )
+               } 
+             />
++            <Route 
++              path="/savings-setup" 
++              element={
++                isAuthenticated ? (
++                  <div className="staff-portal">
++                    <Header setAuth={setAuth} />
++                    <div className="portal-content">
++                      <Sidebar />
++                      <main className="main-content">
++                        <ProtectedRoute requiredRoute="/savings-setup">
++                          <SavingsSetup />
++                        </ProtectedRoute>
++                      </main>
++                    </div>
++                  </div>
++                ) : (
++                  <Navigate to="/login" replace />
++                )
++              } 
++            />
+           </Routes>
+         </div>
+       </Router>
+diff --git a/staff-portal/src/pages/AdminDashboard.js b/staff-portal/src/pages/AdminDashboard.js
+index 3d8e416..acb4df1 100644
+--- a/staff-portal/src/pages/AdminDashboard.js
++++ b/staff-portal/src/pages/AdminDashboard.js
+@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
+ import { useNavigate } from 'react-router-dom';
+ import { toast, ToastContainer } from 'react-toastify';
+ import { io } from 'socket.io-client';
++import axios from 'axios';
+ import 'react-toastify/dist/ReactToastify.css';
+ import '../pages/Dashboard.css';
+ 
+@@ -14,6 +15,9 @@ const AdminDashboard = ({ setAuth }) => {
+         totalTransactions: 0
+     });
+     const [newApplications, setNewApplications] = useState([]); // State for new membership applications
++    const [loanApps, setLoanApps] = useState([]);
++    const [selectedLoanApp, setSelectedLoanApp] = useState(null);
++    const [loanLoading, setLoanLoading] = useState(false);
+     const navigate = useNavigate();
+ 
+     useEffect(() => {
+@@ -78,6 +82,23 @@ const AdminDashboard = ({ setAuth }) => {
+ 
+             fetchUserInfo();
+             loadInitialApplications();
++            // load approved loans for admin to assign amounts
++            const loadApprovedLoans = async () => {
++                try {
++                    const resp = await axios.get('http://localhost:5000/api/loan-review/applications?status=approved', {
++                        headers: {
++                            'Content-Type': 'application/json',
++                            token: localStorage.token
++                        }
++                    });
++                    if (resp.data && resp.data.success) {
++                        setLoanApps(resp.data.applications || []);
++                    }
++                } catch (err) {
++                    console.error('Error loading approved loans:', err);
++                }
++            };
++            loadApprovedLoans();
+ 
+             return () => {
+                 // nothing to clean up here (socket is local to fetchUserInfo)
+@@ -216,6 +237,120 @@ const AdminDashboard = ({ setAuth }) => {
+                         )}
+                     </div>
+                 </div>
++                <div className="dashboard-section">
++                    <h2>Loan Amounts (Admin)</h2>
++                    <p>Assign final loan amounts and calculate deductions for approved applications.</p>
++                    <div className="application-list">
++                        {loanApps.length > 0 ? (
++                            loanApps.map((app) => (
++                                <div key={app.application_id} className="application-item">
++                                    <span className="application-name">{app.applicant_name || `${app.first_name || ''} ${app.last_name || ''}`}</span>
++                                    <span className="application-date">{new Date(app.submitted_at || Date.now()).toLocaleString()}</span>
++                                    <div style={{marginTop: '0.5rem'}}>
++                                        <button className="action-btn small" onClick={() => setSelectedLoanApp(app)}>Set Loan Amount</button>
++                                    </div>
++                                </div>
++                            ))
++                        ) : (
++                            <p>No approved loan applications awaiting amounts.</p>
++                        )}
++                    </div>
++                </div>
++
++                {selectedLoanApp && (
++                    <div className="modal-overlay">
++                        <div className="modal-content">
++                            <div className="modal-header">
++                                <h2>Set Loan Amount for #{selectedLoanApp.application_id}</h2>
++                                <button className="close-btn" onClick={() => setSelectedLoanApp(null)}>✕</button>
++                            </div>
++                            <div className="modal-body">
++                                <div className="info-grid">
++                                    <div className="info-item">
++                                        <label>Requested Amount</label>
++                                        <div>{selectedLoanApp.requested_amount || selectedLoanApp.loan_amount || 'N/A'}</div>
++                                    </div>
++                                    <div className="info-item">
++                                        <label>Loan Type</label>
++                                        <div>{selectedLoanApp.loan_type || 'regular'}</div>
++                                    </div>
++                                    <div className="info-item">
++                                        <label>Final Loan Amount (gross)</label>
++                                        <input type="number" min="0" step="0.01" value={selectedLoanApp.loan_amount || ''}
++                                            onChange={e => setSelectedLoanApp({...selectedLoanApp, loan_amount: e.target.value})} />
++                                    </div>
++                                </div>
++
++                                {selectedLoanApp.loan_amount && (
++                                    (() => {
++                                        const amount = parseFloat(selectedLoanApp.loan_amount) || 0;
++                                        const months = selectedLoanApp.loan_type === 'quick' ? 6 : 12;
++                                        const serviceFee = amount * 0.03;
++                                        const shareCapital = amount * 0.03;
++                                        const insurance = (amount * months) / 1000;
++                                        const annualInterestRate = 0.12;
++                                        const monthlyInterestRate = annualInterestRate / 12;
++                                        const n = months;
++                                        const P = amount;
++                                        const r = monthlyInterestRate;
++                                        const monthlyPayment = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
++                                        const netProceeds = amount - serviceFee - shareCapital - insurance;
++                                        return (
++                                            <div className="deductions-section" style={{marginTop: '1rem'}}>
++                                                <h5>Deductions</h5>
++                                                <div>Service Fee (3%): ₱{serviceFee.toFixed(2)}</div>
++                                                <div>Share Capital (3%): ₱{shareCapital.toFixed(2)}</div>
++                                                <div>Insurance: ₱{insurance.toFixed(2)}</div>
++                                                <div>Net Proceeds: <b>₱{netProceeds.toFixed(2)}</b></div>
++                                                <h5 style={{marginTop: '1rem'}}>Monthly Payment</h5>
++                                                <div>Monthly Payment: <b>₱{monthlyPayment.toFixed(2)}</b></div>
++                                            </div>
++                                        );
++                                    })()
++                                )}
++                            </div>
++                            <div className="modal-footer">
++                                <button className="btn btn-primary" disabled={loanLoading} onClick={async () => {
++                                    setLoanLoading(true);
++                                    try {
++                                        const amount = parseFloat(selectedLoanApp.loan_amount) || 0;
++                                        const months = selectedLoanApp.loan_type === 'quick' ? 6 : 12;
++                                        const annualInterestRate = 0.12;
++                                        const monthlyInterestRate = annualInterestRate / 12;
++                                        const n = months;
++                                        const P = amount;
++                                        const r = monthlyInterestRate;
++                                        const monthlyPayment = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
++                                        const serviceFee = amount * 0.03;
++                                        const shareCapital = amount * 0.03;
++                                        const insurance = (amount * months) / 1000;
++                                        const netProceeds = amount - serviceFee - shareCapital - insurance;
++
++                                        await axios.post(`http://localhost:5000/api/loan-review/applications/${selectedLoanApp.application_id}/set-loan-amount`, {
++                                            loan_amount: netProceeds,
++                                            loan_duration: months,
++                                            monthly_payment: monthlyPayment
++                                        }, {
++                                            headers: {
++                                                'Content-Type': 'application/json',
++                                                token: localStorage.token
++                                            }
++                                        });
++                                        alert('Loan amount saved');
++                                        // remove from list
++                                        setLoanApps(prev => prev.filter(a => a.application_id !== selectedLoanApp.application_id));
++                                        setSelectedLoanApp(null);
++                                    } catch (err) {
++                                        console.error('Error saving loan amount:', err);
++                                        alert('Failed to save loan amount');
++                                    }
++                                    setLoanLoading(false);
++                                }}>Save Loan Amount</button>
++                                <button className="btn btn-secondary" onClick={() => setSelectedLoanApp(null)}>Cancel</button>
++                            </div>
++                        </div>
++                    </div>
++                )}
+             </div>
+             {/* Toast container for react-toastify toasts */}
+             <ToastContainer />
+diff --git a/staff-portal/src/pages/CreditInvestigatorDashboard.js b/staff-portal/src/pages/CreditInvestigatorDashboard.js
+index 5021742..17247b9 100644
+--- a/staff-portal/src/pages/CreditInvestigatorDashboard.js
++++ b/staff-portal/src/pages/CreditInvestigatorDashboard.js
+@@ -280,80 +280,10 @@ const CreditInvestigatorDashboard = () => {
+                   {loading ? 'Sending...' : 'Send to Manager for Approval'}
+                 </button>
+               )}
+-              {/* Loan Officer can input loan amount if approved by manager */}
++              {/* Loan amount assignment has moved to the Administrator dashboard. */}
+               {selectedApplication.review_status === 'approved' && (
+                 <div style={{width: '100%', marginTop: '1rem'}}>
+-                  <h4>Set Loan Amount & Calculate Deductions</h4>
+-                  <div className="info-grid">
+-                    <div className="info-item">
+-                      <label>Loan Amount:</label>
+-                      <input type="number" min="0" step="0.01" style={{width: '120px'}} value={selectedApplication.loan_amount || ''}
+-                        onChange={e => setSelectedApplication({...selectedApplication, loan_amount: e.target.value})} />
+-                    </div>
+-                    <div className="info-item">
+-                      <label>Loan Duration:</label>
+-                      <span>
+-                        {selectedApplication.loan_type === 'quick' ? '6 months' : selectedApplication.loan_type === 'regular' ? '12 months' : 'N/A'}
+-                      </span>
+-                    </div>
+-                  </div>
+-                  {/* Deductions Calculation Section */}
+-                  {selectedApplication.loan_amount && (
+-                    (() => {
+-                      const amount = parseFloat(selectedApplication.loan_amount) || 0;
+-                      const months = selectedApplication.loan_type === 'quick' ? 6 : 12;
+-                      const serviceFee = amount * 0.03;
+-                      const shareCapital = amount * 0.03;
+-                      const insurance = (amount * months) / 1000;
+-                      // Monthly Payment Calculation
+-                      const annualInterestRate = 0.12; // Example: 12% annual
+-                      const monthlyInterestRate = annualInterestRate / 12;
+-                      const n = months;
+-                      const P = amount;
+-                      const r = monthlyInterestRate;
+-                      const monthlyPayment = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+-                      // Net proceeds
+-                      const netProceeds = amount - serviceFee - shareCapital - insurance;
+-                      return (
+-                        <div className="deductions-section" style={{marginTop: '1rem'}}>
+-                          <h5>Deductions</h5>
+-                          <div>Service Fee (3%): ₱{serviceFee.toFixed(2)}</div>
+-                          <div>Share Capital (3%): ₱{shareCapital.toFixed(2)}</div>
+-                          <div>Insurance: ₱{insurance.toFixed(2)}</div>
+-                          <div>Net Proceeds: <b>₱{netProceeds.toFixed(2)}</b></div>
+-                          <h5 style={{marginTop: '1rem'}}>Monthly Payment</h5>
+-                          <div>Monthly Payment: <b>₱{monthlyPayment.toFixed(2)}</b></div>
+-                        </div>
+-                      );
+-                    })()
+-                  )}
+-                  <button className="btn btn-primary" style={{marginTop: '1rem'}} onClick={() => {
+-                    // Save loan amount logic here (API call)
+-                    const amount = parseFloat(selectedApplication.loan_amount) || 0;
+-                    const months = selectedApplication.loan_type === 'quick' ? 6 : 12;
+-                    const serviceFee = amount * 0.03;
+-                    const shareCapital = amount * 0.03;
+-                    const insurance = (amount * months) / 1000;
+-                    const netProceeds = amount - serviceFee - shareCapital - insurance;
+-                    const annualInterestRate = 0.12;
+-                    const monthlyInterestRate = annualInterestRate / 12;
+-                    const n = months;
+-                    const P = amount;
+-                    const r = monthlyInterestRate;
+-                    const monthlyPayment = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+-                    axios.post(`http://localhost:5000/api/loan-review/applications/${selectedApplication.application_id}/set-loan-amount`, {
+-                      loan_amount: netProceeds,
+-                      loan_duration: months,
+-                      monthly_payment: monthlyPayment
+-                    }).then(() => {
+-                      alert('Loan amount and deductions saved!');
+-                      setSelectedApplication(null);
+-                    }).catch(() => {
+-                      alert('Error saving loan amount');
+-                    });
+-                  }}>
+-                    Save Loan Amount
+-                  </button>
++                  <p><em>Loan amount assignment and deductions calculation are handled by administrators. Please forward this application to an admin for finalization.</em></p>
+                 </div>
+               )}
+               <button className="btn btn-secondary" onClick={() => setSelectedApplication(null)}>Cancel</button>
+diff --git a/staff-portal/src/pages/LoanAmounts.js b/staff-portal/src/pages/LoanAmounts.js
+new file mode 100644
+index 0000000..4624295
+--- /dev/null
++++ b/staff-portal/src/pages/LoanAmounts.js
+@@ -0,0 +1,156 @@
++import React, { useEffect, useState } from 'react';
++import axios from 'axios';
++import './Dashboard.css';
++
++const LoanAmounts = () => {
++  const [loanApps, setLoanApps] = useState([]);
++  const [selected, setSelected] = useState(null);
++  const [loading, setLoading] = useState(false);
++
++  useEffect(() => {
++    const load = async () => {
++      try {
++        const resp = await axios.get('http://localhost:5000/api/loan-review/applications?status=approved', {
++          headers: { 'Content-Type': 'application/json', token: localStorage.token }
++        });
++        if (resp.data && resp.data.success) setLoanApps(resp.data.applications || []);
++      } catch (err) {
++        console.error('Error loading approved loans:', err);
++      }
++    };
++    load();
++  }, []);
++
++  const saveAmount = async () => {
++    if (!selected) return;
++    setLoading(true);
++    try {
++      const amount = parseFloat(selected.loan_amount) || 0;
++      const months = selected.loan_type === 'quick' ? 6 : 12;
++      const annualInterestRate = 0.12;
++      const monthlyInterestRate = annualInterestRate / 12;
++      const n = months;
++      const P = amount;
++      const r = monthlyInterestRate;
++      const monthlyPayment = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
++      const serviceFee = amount * 0.03;
++      const shareCapital = amount * 0.03;
++      const insurance = (amount * months) / 1000;
++      const netProceeds = amount - serviceFee - shareCapital - insurance;
++
++      await axios.post(
++        `http://localhost:5000/api/loan-review/applications/${selected.application_id}/set-loan-amount`,
++        { loan_amount: netProceeds, loan_duration: months, monthly_payment: monthlyPayment },
++        { headers: { 'Content-Type': 'application/json', token: localStorage.token } }
++      );
++
++      // remove from list and close
++      setLoanApps(prev => prev.filter(a => a.application_id !== selected.application_id));
++      setSelected(null);
++    } catch (err) {
++      console.error('Failed to save loan amount:', err);
++      alert('Failed to save loan amount');
++    }
++    setLoading(false);
++  };
++
++  return (
++    <div className="dashboard-container">
++      <div className="page-header">
++        <h1>Loan Amounts (Admin)</h1>
++        <p>Assign final loan amounts and calculate deductions for approved applications.</p>
++      </div>
++
++      <div className="applications-section">
++        <div className="table-container">
++          <table className="applications-table">
++            <thead>
++              <tr>
++                <th>Application ID</th>
++                <th>Applicant</th>
++                <th>Member Number</th>
++                <th>Submitted</th>
++                <th>Action</th>
++              </tr>
++            </thead>
++            <tbody>
++              {loanApps.length === 0 ? (
++                <tr><td colSpan={5}>No approved loan applications awaiting amounts.</td></tr>
++              ) : (
++                loanApps.map(app => (
++                  <tr key={app.application_id}>
++                    <td>{app.application_id}</td>
++                    <td>{app.applicant_name || `${app.first_name || ''} ${app.last_name || ''}`}</td>
++                    <td>{app.member_number}</td>
++                    <td>{app.submitted_at ? new Date(app.submitted_at).toLocaleString() : 'N/A'}</td>
++                    <td>
++                      <button className="btn btn-primary btn-sm" onClick={() => setSelected(app)}>Set Loan Amount</button>
++                    </td>
++                  </tr>
++                ))
++              )}
++            </tbody>
++          </table>
++        </div>
++      </div>
++
++      {selected && (
++        <div className="modal-overlay">
++          <div className="modal-content">
++            <div className="modal-header">
++              <h2>Set Loan Amount for #{selected.application_id}</h2>
++              <button className="close-btn" onClick={() => setSelected(null)}>✕</button>
++            </div>
++            <div className="modal-body">
++              <div className="info-grid">
++                <div className="info-item">
++                  <label>Final Loan Amount (gross)</label>
++                  <input type="number" min="0" step="0.01" value={selected.loan_amount || ''}
++                    onChange={e => setSelected({...selected, loan_amount: e.target.value})} />
++                </div>
++                <div className="info-item">
++                  <label>Loan Type</label>
++                  <div>{selected.loan_type || 'regular'}</div>
++                </div>
++              </div>
++
++              {selected.loan_amount && (
++                (() => {
++                  const amount = parseFloat(selected.loan_amount) || 0;
++                  const months = selected.loan_type === 'quick' ? 6 : 12;
++                  const serviceFee = amount * 0.03;
++                  const shareCapital = amount * 0.03;
++                  const insurance = (amount * months) / 1000;
++                  const annualInterestRate = 0.12;
++                  const monthlyInterestRate = annualInterestRate / 12;
++                  const n = months;
++                  const P = amount;
++                  const r = monthlyInterestRate;
++                  const monthlyPayment = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
++                  const netProceeds = amount - serviceFee - shareCapital - insurance;
++                  return (
++                    <div className="deductions-section" style={{marginTop: '1rem'}}>
++                      <h5>Deductions</h5>
++                      <div>Service Fee (3%): ₱{serviceFee.toFixed(2)}</div>
++                      <div>Share Capital (3%): ₱{shareCapital.toFixed(2)}</div>
++                      <div>Insurance: ₱{insurance.toFixed(2)}</div>
++                      <div>Net Proceeds: <b>₱{netProceeds.toFixed(2)}</b></div>
++                      <h5 style={{marginTop: '1rem'}}>Monthly Payment</h5>
++                      <div>Monthly Payment: <b>₱{monthlyPayment.toFixed(2)}</b></div>
++                    </div>
++                  );
++                })()
++              )}
++            </div>
++            <div className="modal-footer">
++              <button className="btn btn-primary" disabled={loading} onClick={saveAmount}>Save Loan Amount</button>
++              <button className="btn btn-secondary" onClick={() => setSelected(null)}>Cancel</button>
++            </div>
++          </div>
++        </div>
++      )}
++    </div>
++  );
++};
++
++export default LoanAmounts;
+diff --git a/staff-portal/src/pages/SavingsSetup.js b/staff-portal/src/pages/SavingsSetup.js
+new file mode 100644
+index 0000000..b60f167
+--- /dev/null
++++ b/staff-portal/src/pages/SavingsSetup.js
+@@ -0,0 +1,102 @@
++import React, { useEffect, useState } from 'react';
++import axios from 'axios';
++import './Dashboard.css';
++
++const SavingsSetup = () => {
++  const [members, setMembers] = useState([]);
++  const [selectedMember, setSelectedMember] = useState(null);
++  const [memberNumberInput, setMemberNumberInput] = useState('');
++  const [initialDeposit, setInitialDeposit] = useState('');
++  const [creating, setCreating] = useState(false);
++
++  useEffect(() => {
++    const loadMembers = async () => {
++      try {
++        const resp = await axios.get('http://localhost:5000/api/members', {
++          headers: { 'Content-Type': 'application/json', token: localStorage.token }
++        });
++        if (resp.data && resp.data.success) setMembers(resp.data.members || []);
++      } catch (err) {
++        console.error('Failed to load members:', err);
++      }
++    };
++    loadMembers();
++  }, []);
++
++  const createSavings = async () => {
++    const member_number = selectedMember ? selectedMember.member_number : memberNumberInput;
++    if (!member_number) return alert('Provide a member number');
++    setCreating(true);
++    try {
++      const payload = {
++        member_number,
++        initial_deposit: Number(initialDeposit) || 0,
++        account_type: 'savings'
++      };
++
++      await axios.post('http://localhost:5000/api/accounts/create', payload, {
++        headers: { 'Content-Type': 'application/json', token: localStorage.token }
++      });
++
++      alert('Savings account created');
++      // reset
++      setSelectedMember(null);
++  setMemberNumberInput('');
++      setInitialDeposit('');
++    } catch (err) {
++      console.error('Create savings failed:', err);
++      alert('Failed to create savings account');
++    }
++    setCreating(false);
++  };
++
++  return (
++    <div className="dashboard-container">
++      <div className="page-header">
++        <h1>Setup Savings Account</h1>
++        <p>Create a savings account for a member and set an initial deposit.</p>
++      </div>
++
++      <div className="card">
++        <div style={{ padding: '1rem' }}>
++          <div style={{ marginBottom: '1rem' }}>
++            <label>Member</label>
++            {members && members.length > 0 ? (
++              <select value={selectedMember ? selectedMember.member_number : ''}
++                onChange={e => {
++                  const mn = e.target.value;
++                  const m = members.find(x => String(x.member_number) === String(mn));
++                  setSelectedMember(m || null);
++                  setMemberNumberInput('');
++                }}
++                style={{ marginLeft: '0.5rem' }}>
++                <option value="">-- choose member --</option>
++                {members.map(m => (
++                  <option key={m.member_number} value={m.member_number}>{m.member_number} — {m.user_name || m.full_name || m.user_email}</option>
++                ))}
++              </select>
++            ) : (
++              <input placeholder="Enter member number" value={memberNumberInput} onChange={e => setMemberNumberInput(e.target.value)} style={{ marginLeft: '0.5rem' }} />
++            )}
++            <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#666' }}>
++              You can type a member number directly if the list is empty or the member is not listed.
++            </div>
++          </div>
++
++          <div style={{ marginBottom: '1rem' }}>
++            <label>Initial Deposit</label>
++            <input style={{ marginLeft: '0.5rem' }} type="number" min="0" step="0.01" value={initialDeposit}
++              onChange={e => setInitialDeposit(e.target.value)} />
++          </div>
++
++          <div>
++            <button className="btn btn-primary" onClick={createSavings} disabled={creating}>{creating ? 'Creating...' : 'Create Savings Account'}</button>
++            <button className="btn btn-secondary" style={{ marginLeft: '0.5rem' }} onClick={() => { setSelectedMember(null); setMemberNumberInput(''); setInitialDeposit(''); }}>Reset</button>
++          </div>
++        </div>
++      </div>
++    </div>
++  );
++};
++
++export default SavingsSetup;
+diff --git a/staff-portal/src/utils/permissions.js b/staff-portal/src/utils/permissions.js
+index f1a86b5..c5044a2 100644
+--- a/staff-portal/src/utils/permissions.js
++++ b/staff-portal/src/utils/permissions.js
+@@ -2,7 +2,7 @@
+ export const PERMISSIONS = {
+   // Admin permissions - limited to member management and reports
+   admin: {
+-    allowedRoutes: ['/dashboard', '/members', '/reports', '/membership-applications'],
++    allowedRoutes: ['/dashboard', '/members', '/reports', '/membership-applications', '/loan-amounts'],
+     menuItems: [
+       {
+         path: '/dashboard',
+@@ -22,6 +22,18 @@ export const PERMISSIONS = {
+         label: 'Applications',
+         description: 'Membership Applications'
+       },
++      {
++        path: '/savings-setup',
++        icon: '🏦',
++        label: 'Savings',
++        description: 'Setup Member Savings'
++      },
++      {
++        path: '/loan-amounts',
++        icon: '🏦',
++        label: 'Loan Amounts',
++        description: 'Assign Loan Amounts'
++      },
+       {
+         path: '/reports',
+         icon: '📈',
+@@ -119,7 +131,7 @@ export const PERMISSIONS = {
+ 
+   // Cashier permissions - transactions and basic member info
+   cashier: {
+-    allowedRoutes: ['/dashboard', '/members', '/accounts', '/transactions', '/create-invoice'],
++    allowedRoutes: ['/dashboard', '/members', '/accounts', '/transactions', '/create-invoice', '/savings-setup'],
+     menuItems: [
+       {
+         path: '/dashboard',
+@@ -139,6 +151,12 @@ export const PERMISSIONS = {
+         label: 'Accounts',
+         description: 'Account Services'
+       },
++      {
++        path: '/savings-setup',
++        icon: '🏦',
++        label: 'Savings',
++        description: 'Setup Member Savings'
++      },
+       {
+         path: '/transactions',
+         icon: '💳',
+@@ -220,24 +238,44 @@ export const PERMISSIONS = {
+ 
+ // Helper function to check if user has permission for a route
+ export const hasPermission = (userRole, route) => {
+-  if (!userRole || !PERMISSIONS[userRole]) {
+-    return false;
+-  }
+-  return PERMISSIONS[userRole].allowedRoutes.includes(route);
++  if (!userRole) return false;
++  // normalize role (case-insensitive, allow variants like 'Administrator' or 'ADMIN')
++  const normalized = normalizeRole(userRole);
++  if (!PERMISSIONS[normalized]) return false;
++  return PERMISSIONS[normalized].allowedRoutes.includes(route);
+ };
+ 
+ // Helper function to get menu items for a role
+ export const getMenuItems = (userRole) => {
+-  if (!userRole || !PERMISSIONS[userRole]) {
+-    return [];
+-  }
+-  return PERMISSIONS[userRole].menuItems;
++  if (!userRole) return [];
++  const normalized = normalizeRole(userRole);
++  if (!PERMISSIONS[normalized]) return [];
++  return PERMISSIONS[normalized].menuItems;
+ };
+ 
+ // Helper function to get allowed routes for a role
+ export const getAllowedRoutes = (userRole) => {
+-  if (!userRole || !PERMISSIONS[userRole]) {
+-    return [];
+-  }
+-  return PERMISSIONS[userRole].allowedRoutes;
++  if (!userRole) return [];
++  const normalized = normalizeRole(userRole);
++  if (!PERMISSIONS[normalized]) return [];
++  return PERMISSIONS[normalized].allowedRoutes;
+ };
++
++// Normalize role string to match keys in PERMISSIONS
++function normalizeRole(role) {
++  if (!role) return '';
++  const r = String(role).trim().toLowerCase();
++  // common mappings
++  if (r === 'administrator' || r === 'admin' || r === 'administrator_role' || r === 'administrator_role') return 'admin';
++  if (r === 'it admin' || r === 'it_admin' || r === 'it-admin') return 'it_admin';
++  if (r === 'loan officer' || r === 'loan_officer' || r === 'loan-officer') return 'loan_officer';
++  if (r === 'cashier') return 'cashier';
++  if (r === 'manager') return 'manager';
++  if (r === 'credit investigator' || r === 'credit_investigator' || r === 'credit-investigator') return 'credit_investigator';
++  // fallback: if key exists directly, return it
++  if (PERMISSIONS[r]) return r;
++  // last attempt: try underscore form
++  const us = r.replace(/\s+/g, '_');
++  if (PERMISSIONS[us]) return us;
++  return r;
++}
+-- 
+2.51.1
+

@@ -1,0 +1,69 @@
+From 0684d96220893378e163d7d8a0265b237e06b842 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Tue, 25 Nov 2025 22:10:03 +0800
+Subject: [PATCH 24/37] member-portal: make LoanTracker fetch robust (try
+ relative /api first, fallback to localhost:5001) and improve error messages
+
+---
+ member-portal/src/pages/LoanTracker.js | 36 ++++++++++++++++++++++----
+ 1 file changed, 31 insertions(+), 5 deletions(-)
+
+diff --git a/member-portal/src/pages/LoanTracker.js b/member-portal/src/pages/LoanTracker.js
+index d37cc70..7f6b7d5 100644
+--- a/member-portal/src/pages/LoanTracker.js
++++ b/member-portal/src/pages/LoanTracker.js
+@@ -51,20 +51,46 @@ const LoanTracker = () => {
+     const fetchApps = async () => {
+       setLoading(true);
+       setError(null);
+-      try {
+-        const url = `http://localhost:5001/api/loan-application/list?user_id=${encodeURIComponent(user.user_id)}`;
++
++      const query = `user_id=${encodeURIComponent(user.user_id)}`;
++      const relativeUrl = `/api/loan-application/list?${query}`;
++      const fallbackUrl = `http://localhost:5001/api/loan-application/list?${query}`;
++
++      const doFetch = async (url) => {
+         const res = await fetch(url, {
+           headers: {
+             'Authorization': `Bearer ${localStorage.getItem('token')}`
+           }
+         });
+-        const data = await res.json();
+-        if (!data.success) throw new Error(data.message || 'Failed to load applications');
++        // Try to parse JSON safely
++        let data;
++        try {
++          data = await res.json();
++        } catch (parseErr) {
++          const text = await res.text().catch(() => '<no body>');
++          throw new Error(`Invalid JSON from ${url} - status ${res.status} - body: ${text}`);
++        }
++        if (!res.ok) {
++          throw new Error(data?.message || `HTTP ${res.status} from ${url}`);
++        }
++        if (!data.success) {
++          throw new Error(data.message || `API returned success=false from ${url}`);
++        }
++        return data;
++      };
++
++      try {
++        // Try relative URL first (works when backend is proxied or same-origin)
++        const data = await doFetch(relativeUrl).catch(async (e) => {
++          console.warn('Relative fetch failed, trying fallback:', e.message);
++          return await doFetch(fallbackUrl);
++        });
++
+         const apps = data.applications || [];
+         setApplication(apps.length > 0 ? apps[0] : null);
+       } catch (err) {
+         console.error('Failed to fetch loan applications', err);
+-        setError(err.message || 'Failed to fetch loan application');
++        setError('Error fetching loan application details');
+       } finally {
+         setLoading(false);
+       }
+-- 
+2.51.1
+

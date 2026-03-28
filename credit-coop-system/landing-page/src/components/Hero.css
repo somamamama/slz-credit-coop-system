@@ -1,0 +1,367 @@
+.hero {
+  background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
+  padding: 120px 0 80px;
+  min-height: 90vh;
+  display: flex;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
+.hero-pattern {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at 25% 25%, var(--secondary-blue) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(0, 61, 130, 0.1) 0%, transparent 50%);
+  opacity: 0.6;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-3xl);
+  align-items: center;
+  margin-bottom: var(--spacing-3xl);
+}
+
+.hero-text {
+  max-width: 600px;
+}
+
+.hero-badge {
+  display: inline-block;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--secondary-blue);
+  color: var(--primary-blue);
+  border-radius: 50px;
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-lg);
+  border: 1px solid rgba(0, 61, 130, 0.2);
+}
+
+.hero-title {
+  font-size: 3.5rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 1.1;
+  margin-bottom: var(--spacing-lg);
+  color: var(--gray-900);
+}
+
+.hero-description {
+  font-size: 1.25rem;
+  line-height: 1.6;
+  color: var(--gray-600);
+  margin-bottom: var(--spacing-xl);
+}
+
+.hero-buttons {
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-xl);
+}
+
+.hero-buttons .btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.hero-features {
+  display: flex;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: 0.875rem;
+  color: var(--gray-600);
+  font-weight: var(--font-weight-medium);
+}
+
+.feature-icon {
+  font-size: 1.25rem;
+}
+
+.feature-icon img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+/* Hero Visual */
+.hero-visual {
+  position: relative;
+  height: 500px;
+}
+
+.hero-cards {
+  position: relative;
+  height: 100%;
+}
+
+.hero-card {
+  position: absolute;
+  background: var(--white);
+  border-radius: var(--border-radius-xl);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-xl);
+  min-width: 200px;
+  border: 1px solid var(--gray-100);
+  transition: var(--transition);
+}
+
+.hero-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.card-savings {
+  top: 50px;
+  left: 0;
+  z-index: 3;
+}
+
+.card-loan {
+  top: 150px;
+  right: 20px;
+  z-index: 2;
+}
+
+.card-investment {
+  top: 280px;
+  left: 80px;
+  z-index: 1;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.card-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--gray-800);
+}
+
+.card-icon {
+  font-size: 1.5rem;
+}
+
+.card-icon img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.card-amount {
+  font-size: 1.5rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--primary-blue);
+  margin-bottom: var(--spacing-xs);
+}
+
+.card-growth {
+  font-size: 0.875rem;
+  color: var(--accent-green);
+  font-weight: var(--font-weight-medium);
+}
+
+.card-rate {
+  font-size: 1.25rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--primary-blue);
+  margin-bottom: var(--spacing-xs);
+}
+
+.card-term {
+  font-size: 0.875rem;
+  color: var(--gray-600);
+}
+
+/* Hero Stats */
+.hero-stats {
+  position: relative;
+  z-index: 2;
+}
+
+.stats-grid {
+  display: grid;
+  /* Use three columns now that one stat was removed */
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-xl);
+  padding: var(--spacing-xl);
+  background: var(--white);
+  /* Softer shadow and slightly larger radius for an airy card */
+  border-radius: 20px;
+  box-shadow: 0 12px 30px rgba(12,18,30,0.06);
+  border: 1px solid var(--gray-100);
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 2.6rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--primary-blue);
+  margin-bottom: var(--spacing-xs);
+  /* Make the number more prominent and give it a subtle pill background */
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(11,59,111,0.06);
+  letter-spacing: 0.6px;
+}
+
+/* Add light dividers between stat items on larger screens */
+.stat-item + .stat-item {
+  border-left: 1px solid rgba(16,24,40,0.06);
+  padding-left: 1.25rem;
+}
+
+/* Micro interaction and subtle lift */
+.stat-item {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.stat-item:hover {
+  transform: translateY(-5px);
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: var(--gray-600);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Fade-up entrance for subtle motion */
+.fade-up {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.6s cubic-bezier(.2,.9,.2,1), transform 0.6s cubic-bezier(.2,.9,.2,1);
+}
+
+.fade-up.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Remove vertical dividers on small screens */
+@media (max-width: 768px) {
+  .stat-item + .stat-item {
+    border-left: none;
+    padding-left: 0;
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .hero-content {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-2xl);
+    text-align: center;
+  }
+  
+  .hero-visual {
+    height: 400px;
+  }
+  
+  .hero-title {
+    font-size: 3rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero {
+    padding: 100px 0 60px;
+    min-height: auto;
+  }
+  
+  .hero-title {
+    font-size: 2.5rem;
+  }
+  
+  .hero-description {
+    font-size: 1.125rem;
+  }
+  
+  .hero-buttons {
+    justify-content: center;
+  }
+  
+  .hero-features {
+    justify-content: center;
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+  }
+  
+  .stat-number {
+    font-size: 1.5rem;
+  }
+  
+  .hero-visual {
+    height: 300px;
+  }
+  
+  .hero-card {
+    min-width: 160px;
+    padding: var(--spacing-md);
+  }
+  
+  .card-amount {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 2rem;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .hero-buttons {
+    flex-direction: column;
+  }
+  
+  .hero-features {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .hero-visual {
+    display: none;
+  }
+}

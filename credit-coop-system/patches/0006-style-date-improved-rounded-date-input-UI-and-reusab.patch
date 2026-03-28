@@ -1,0 +1,89 @@
+From 2f7a2168b3f9692b045480cabdf58a29e87d949c Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Sun, 23 Nov 2025 10:19:47 +0800
+Subject: [PATCH 06/37] style(date): improved rounded date input UI and
+ reusable .styled-date-input
+
+---
+ staff-portal/src/App.css           | 19 ++++++++++++++++++
+ staff-portal/src/pages/Reports.css | 31 +++++++++++++++++++++++++++---
+ 2 files changed, 47 insertions(+), 3 deletions(-)
+
+diff --git a/staff-portal/src/App.css b/staff-portal/src/App.css
+index 177d615..37d0639 100644
+--- a/staff-portal/src/App.css
++++ b/staff-portal/src/App.css
+@@ -206,6 +206,25 @@ body {
+   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+ }
+ 
++/* Reusable styled date input used across the staff portal */
++.styled-date-input {
++  height: 44px;
++  padding-left: 1rem;
++  padding-right: 2.6rem;
++  border-radius: 10px;
++  border: 1px solid rgba(148,163,184,0.35);
++  background: var(--white);
++  display: inline-flex;
++  align-items: center;
++  font-size: 0.95rem;
++  color: var(--gray-700);
++}
++
++/* make sure native date text is readable in webkit */
++.styled-date-input[type="date"]::-webkit-datetime-edit-fields-wrapper {
++  color: rgba(31,41,55,0.9);
++}
++
+ .form-control.error {
+   border-color: var(--error-red);
+ }
+diff --git a/staff-portal/src/pages/Reports.css b/staff-portal/src/pages/Reports.css
+index a286e5c..e838887 100644
+--- a/staff-portal/src/pages/Reports.css
++++ b/staff-portal/src/pages/Reports.css
+@@ -48,12 +48,37 @@
+ /* date input: add calendar icon on right */
+ .reports-controls input[type="date"] {
+   padding-right: 2.6rem;
++  padding-left: 1rem;
+   background-repeat: no-repeat;
+-  background-position: right 10px center;
+-  background-size: 16px 16px;
+-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2373798b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
++  background-position: right 12px center;
++  background-size: 18px 18px;
++  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2381899a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='3' ry='3'/%3E%3Cpath d='M8 2v4M16 2v4M3 10h18'/%3E%3C/svg%3E");
+   -webkit-appearance: none;
+   appearance: none;
++  height: 44px;
++  border-radius: 10px;
++  border: 1px solid rgba(148,163,184,0.4);
++  font-size: 0.95rem;
++  color: var(--gray-700);
++}
++
++/* Improve the visual text for native date inputs across webkit browsers */
++.reports-controls input[type="date"]::-webkit-datetime-edit {
++  padding-left: 0.25rem;
++}
++.reports-controls input[type="date"]::-webkit-datetime-edit-fields-wrapper {
++  color: rgba(31,41,55,0.85);
++}
++.reports-controls input[type="date"]::-webkit-datetime-edit-text,
++.reports-controls input[type="date"]::-webkit-datetime-edit-month-field,
++.reports-controls input[type="date"]::-webkit-datetime-edit-day-field,
++.reports-controls input[type="date"]::-webkit-datetime-edit-year-field {
++  color: rgba(31,41,55,0.9);
++}
++
++/* Placeholder-like muted text when empty (non-standard, best-effort) */
++.reports-controls input[type="date"]:not(:focus):invalid {
++  color: rgba(31,41,55,0.45);
+ }
+ 
+ /* tighten label spacing */
+-- 
+2.51.1
+

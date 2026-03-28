@@ -1,0 +1,77 @@
+From b59e20b7f7a5e46f9c7aaec726c440e19bb20d99 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Tue, 25 Nov 2025 21:08:02 +0800
+Subject: [PATCH 14/37] Reports: remove title/logo inputs; embed org title and
+ default logo from /report-assets on PDF
+
+---
+ staff-portal/public/report-assets/README.md | 10 ++++++++
+ staff-portal/src/pages/Reports.js           | 27 ++++++---------------
+ 2 files changed, 18 insertions(+), 19 deletions(-)
+ create mode 100644 staff-portal/public/report-assets/README.md
+
+diff --git a/staff-portal/public/report-assets/README.md b/staff-portal/public/report-assets/README.md
+new file mode 100644
+index 0000000..1434327
+--- /dev/null
++++ b/staff-portal/public/report-assets/README.md
+@@ -0,0 +1,10 @@
++Place report asset files here (served at /report-assets/).
++
++Instructions:
++- Add your organization logo as `logo.png` (recommended size ~100x100 or 300x300).
++- The app will embed `/report-assets/logo.png` into downloaded PDFs automatically.
++
++Example:
++  staff-portal/public/report-assets/logo.png
++
++If you prefer a different filename, update `logoUrl` in `src/pages/Reports.js` accordingly.
+\ No newline at end of file
+diff --git a/staff-portal/src/pages/Reports.js b/staff-portal/src/pages/Reports.js
+index c01e419..9369e4d 100644
+--- a/staff-portal/src/pages/Reports.js
++++ b/staff-portal/src/pages/Reports.js
+@@ -54,8 +54,11 @@ const Reports = () => {
+   const [to, setTo] = useState(() => fmt(new Date()));
+   const [data, setData] = useState(null);
+   const [orgName, setOrgName] = useState('SLZCoop');
+-  const [reportTitle, setReportTitle] = useState('SLZCoop');
+-  const [logoUrl, setLogoUrl] = useState('');
++  // reportTitle will be derived from orgName and embedded in PDF (no UI input)
++  const reportTitle = orgName;
++  // use a default public path for the logo; users can place their logo at public/report-assets/logo.png
++  const [logoUrl, setLogoUrl] = useState('/report-assets/logo.png');
++  // no upload UI, so we don't expect in-memory data URL for logo
+   const [logoDataUrl, setLogoDataUrl] = useState(null);
+ 
+   // compute from/to when preset changes
+@@ -318,23 +321,9 @@ const Reports = () => {
+             </select>
+           </label>
+ 
+-          <label style={{ minWidth: 220 }}>
+-            Report title
+-            <br />
+-            <input className="form-control" value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} />
+-          </label>
+-
+-          <label>
+-            Logo (upload)
+-            <br />
+-            <input type="file" accept="image/*" onChange={(e) => {
+-              const f = e.target.files && e.target.files[0];
+-              if (!f) return;
+-              const fr = new FileReader();
+-              fr.onload = () => setLogoDataUrl(fr.result);
+-              fr.readAsDataURL(f);
+-            }} />
+-          </label>
++          {/* Report title and logo are embedded into the PDF from a default asset path.
++              To change the logo, put a file named `logo.png` into `staff-portal/public/report-assets/`.
++              The UI no longer exposes title/logo inputs for downloads. */}
+ 
+           <label>
+             From
+-- 
+2.51.1
+

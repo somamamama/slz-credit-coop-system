@@ -1,0 +1,294 @@
+/* Reports page specific styling */
+
+.reports-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.reports-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.reports-controls label {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+  color: var(--gray-700);
+  font-size: 0.95rem;
+}
+
+.reports-controls select,
+.reports-controls input[type="date"] {
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  min-width: 140px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  box-shadow: inset 0 -1px 0 rgba(16,24,40,0.02);
+  font-size: 0.95rem;
+}
+
+/* Hide the browser's native calendar picker icon so our custom SVG background icon
+   is the only visible indicator. Keep the native indicator accessible (clickable)
+   by using opacity:0 rather than display:none in WebKit-based browsers. */
+.reports-controls input[type="date"]::-webkit-calendar-picker-indicator {
+  /* hide the native calendar icon (Chrome, Safari, Edge) */
+  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: none;
+}
+
+/* IE/Edge legacy - hide the clear/expand controls where present */
+.reports-controls input[type="date"]::-ms-clear,
+.reports-controls input[type="date"]::-ms-expand {
+  display: none;
+}
+
+/* Firefox (best-effort): remove inner focus border and prefer textfield appearance */
+.reports-controls input[type="date"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+  -webkit-appearance: textfield;
+}
+
+/* compact variants to match screenshot: smaller inputs with subtle icon */
+.reports-controls select {
+  /* visual style: rounded control with a colored left accent bar */
+  padding-right: 2.4rem; /* room for arrow */
+  padding-left: 0.9rem;
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 20 20' fill='%237c3aed'%3E%3Cpath d='M5.23 7.21a.75.75 0 011.06-.02L10 10.7l3.71-3.51a.75.75 0 111.04 1.08l-4.25 4.02a.75.75 0 01-1.06 0L5.25 8.27a.75.75 0 01-.02-1.06z'/%3E%3C/svg%3E");
+  /* left accent */
+  border-left: 6px solid #2563eb; /* blue accent */
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(16,24,40,0.06);
+  height: 44px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.reports-controls select:focus {
+  outline: none;
+  box-shadow: 0 8px 24px rgba(37,99,235,0.12);
+  border-left-color: #1e40af;
+  border-color: rgba(37,99,235,0.12);
+}
+
+/* date input: add calendar icon on right */
+.reports-controls input[type="date"] {
+  padding-right: 2.6rem;
+  padding-left: 1rem;
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 18px 18px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2381899a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='3' ry='3'/%3E%3Cpath d='M8 2v4M16 2v4M3 10h18'/%3E%3C/svg%3E");
+  -webkit-appearance: none;
+  appearance: none;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(148,163,184,0.4);
+  font-size: 0.95rem;
+  color: var(--gray-700);
+}
+
+/* Improve the visual text for native date inputs across webkit browsers */
+.reports-controls input[type="date"]::-webkit-datetime-edit {
+  padding-left: 0.25rem;
+}
+.reports-controls input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  color: rgba(31,41,55,0.85);
+}
+.reports-controls input[type="date"]::-webkit-datetime-edit-text,
+.reports-controls input[type="date"]::-webkit-datetime-edit-month-field,
+.reports-controls input[type="date"]::-webkit-datetime-edit-day-field,
+.reports-controls input[type="date"]::-webkit-datetime-edit-year-field {
+  color: rgba(31,41,55,0.9);
+}
+
+/* Placeholder-like muted text when empty (non-standard, best-effort) */
+.reports-controls input[type="date"]:not(:focus):invalid {
+  color: rgba(31,41,55,0.45);
+}
+
+/* tighten label spacing */
+.reports-controls label {
+  margin-bottom: 0;
+}
+
+.reports-action-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.reports-action-group .btn {
+  padding: 0.6rem 1rem;
+  font-weight: 700;
+  border-radius: 10px;
+}
+
+.reports-action-group .btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Card spacing for the preview */
+.reports-preview {
+  margin-top: 1rem;
+  padding: 1rem;
+}
+
+.reports-preview h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.1rem;
+  color: var(--gray-800);
+}
+
+.reports-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.reports-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--card-shadow);
+}
+
+.reports-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Make table visually lighter and easier to read */
+.reports-table-container {
+  overflow: auto;
+  border-radius: 10px;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+}
+
+.reports-table-container table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.reports-table-container th,
+.reports-table-container td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--gray-100);
+  text-align: left;
+}
+
+.reports-table-container th {
+  background: linear-gradient(90deg, rgba(124,58,237,0.06), rgba(124,58,237,0.02));
+  color: var(--gray-700);
+  font-weight: 700;
+}
+
+.reports-stats {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Mobile stacked report cards (hidden on desktop) */
+.reports-mobile-list {
+  display: none;
+}
+
+.report-card {
+  background: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  box-shadow: var(--card-shadow);
+}
+
+.report-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.report-row-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--gray-700);
+  font-size: 0.95rem;
+}
+
+.report-period { font-weight: 700; }
+.report-net { font-weight: 800; color: var(--primary-purple-dark); }
+.report-member { font-weight: 700; }
+.report-contribution { font-weight: 800; color: var(--primary-purple-dark); }
+
+.report-stat {
+  background: linear-gradient(135deg, rgba(124,58,237,0.06), rgba(167,139,250,0.03));
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  min-width: 140px;
+  box-shadow: var(--card-shadow);
+}
+
+.report-stat .label {
+  font-size: 0.85rem;
+  color: var(--gray-700);
+}
+
+.report-stat .value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--primary-purple-dark);
+}
+
+/* Responsive tweaks */
+@media (max-width: 768px) {
+  .reports-controls {
+    gap: 0.5rem;
+  }
+
+  .reports-controls label {
+    min-width: 140px;
+  }
+
+  .report-stat {
+    min-width: 120px;
+    flex: 1 1 calc(50% - 1rem);
+  }
+
+  /* On small screens: hide the wide table and show stacked cards */
+  .reports-preview .reports-table-container table {
+    display: none;
+  }
+
+  .reports-preview .reports-mobile-list {
+    display: block;
+  }
+}

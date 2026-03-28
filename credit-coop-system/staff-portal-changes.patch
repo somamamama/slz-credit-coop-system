@@ -1,0 +1,1373 @@
+--- /tmp/credit-coop-system-upstream/staff-portal/src/pages/ManagerDashboard.js	2025-11-26 05:41:16.335865838 +0800
++++ /home/soma/Documents/inclusions/credit-coop-system/staff-portal/src/pages/ManagerDashboard.js	2025-11-26 03:59:36.841801061 +0800
+@@ -1,84 +1,24 @@
+-
+ import React, { useState, useEffect } from 'react';
+ import '../pages/Dashboard.css';
+-import { ReactComponent as BankIcon } from '../assets/icons/bank-svgrepo-com.svg';
+-import { ReactComponent as ClipboardIcon } from '../assets/icons/clipboard-text-svgrepo-com.svg';
+-import { ReactComponent as MoneyCheckIcon } from '../assets/icons/money-check-dollar-svgrepo-com.svg';
+-import { ReactComponent as UserIcon } from '../assets/icons/user-svgrepo-com.svg';
++import { io } from 'socket.io-client';
++import axios from 'axios';
++import { toast, ToastContainer } from 'react-toastify';
++import 'react-toastify/dist/ReactToastify.css';
+ 
+ const ManagerDashboard = ({ setAuth }) => {
+     const [userInfo, setUserInfo] = useState(null);
+-    const [showReports, setShowReports] = useState(false);
+     const [stats, setStats] = useState({
+         monthlyRevenue: 0,
+         totalMembers: 0,
+         activeLoanApplications: 0,
+         staffPerformance: 0
+     });
+-    const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+-    const [showReportModal, setShowReportModal] = useState(false);
+-
+-    // Dummy member data from Members.js
+-    const members = [
+-        {
+-            id: 'MEM001',
+-            name: 'Juan Dela Cruz',
+-            email: 'juan.delacruz@email.com',
+-            phone: '+63 912 345 6789',
+-            memberSince: '2020-03-15',
+-            status: 'active',
+-            totalDeposits: 125000,
+-            loanBalance: 45000
+-        },
+-        {
+-            id: 'MEM002',
+-            name: 'Maria Santos',
+-            email: 'maria.santos@email.com',
+-            phone: '+63 917 765 4321',
+-            memberSince: '2019-11-22',
+-            status: 'active',
+-            totalDeposits: 89500,
+-            loanBalance: 0
+-        },
+-        {
+-            id: 'MEM003',
+-            name: 'Pedro Garcia',
+-            email: 'pedro.garcia@email.com',
+-            phone: '+63 922 111 2233',
+-            memberSince: '2021-07-08',
+-            status: 'inactive',
+-            totalDeposits: 15000,
+-            loanBalance: 25000
+-        },
+-        {
+-            id: 'MEM004',
+-            name: 'Ana Rodriguez',
+-            email: 'ana.rodriguez@email.com',
+-            phone: '+63 918 444 5566',
+-            memberSince: '2022-01-12',
+-            status: 'active',
+-            totalDeposits: 67800,
+-            loanBalance: 12000
+-        }
+-    ];
+-
+-    // Calculate financial metrics
+-    const financialData = {
+-        totalDeposits: members.reduce((sum, m) => sum + m.totalDeposits, 0),
+-        totalLoans: members.reduce((sum, m) => sum + m.loanBalance, 0),
+-        activeMembers: members.filter(m => m.status === 'active').length,
+-        inactiveMembers: members.filter(m => m.status === 'inactive').length,
+-        avgDeposit: members.reduce((sum, m) => sum + m.totalDeposits, 0) / members.length,
+-        membersByYear: {}
+-    };
+-
+-    // Group members by year
+-    members.forEach(member => {
+-        const year = new Date(member.memberSince).getFullYear();
+-        financialData.membersByYear[year] = (financialData.membersByYear[year] || 0) + 1;
+-    });
++    const [lastUnderReviewCount, setLastUnderReviewCount] = useState(0);
++    const [underReviewAlert, setUnderReviewAlert] = useState({ visible: false, count: 0 });
++    const [socketStatus, setSocketStatus] = useState('disconnected');
+ 
+     useEffect(() => {
++        console.log('ManagerDashboard mounted');
+         const fetchUserInfo = async () => {
+             try {
+                 const response = await fetch("http://localhost:5000/auth/profile", {
+@@ -99,555 +39,168 @@
+         };
+ 
+         fetchUserInfo();
++        // initial stats for under_review
++        (async () => {
++            try {
++                const r = await axios.get('http://localhost:5000/api/loan-review/statistics');
++                if (r.data?.success) {
++                    const under = Number(r.data.statistics?.under_review || 0);
++                    setLastUnderReviewCount(under);
++                    setStats(prev => ({ ...prev, activeLoanApplications: r.data.statistics?.pending_review || prev.activeLoanApplications }));
++                }
++            } catch (e) {}
++        })();
+     }, []);
+ 
+-<<<<<<< HEAD
+-    // Generate dummy data for the report
+-    const generateDummyReportData = () => {
+-        return {
+-            reportDate: new Date().toLocaleDateString(),
+-            summary: {
+-                totalMembers: 1247,
+-                activeMembers: 1185,
+-                inactiveMembers: 62,
+-                newMembersThisMonth: 23
+-            },
+-            financials: {
+-                totalSavings: 15750000,
+-                totalLoanBalances: 8920000,
+-                totalProfitFromLoans: 1340000,
+-                averageSavingsPerMember: 12640.83,
+-                averageLoanBalance: 18954.26
+-            },
+-            memberBalances: [
+-                { id: 'M001', name: 'Juan Dela Cruz', savings: 75000, loanBalance: 120000, totalContribution: 195000 },
+-                { id: 'M002', name: 'Maria Santos', savings: 45000, loanBalance: 0, totalContribution: 45000 },
+-                { id: 'M003', name: 'Pedro Rodriguez', savings: 28000, loanBalance: 85000, totalContribution: 113000 },
+-                { id: 'M004', name: 'Ana Garcia', savings: 92000, loanBalance: 150000, totalContribution: 242000 },
+-                { id: 'M005', name: 'Carlos Mendoza', savings: 35000, loanBalance: 75000, totalContribution: 110000 },
+-                { id: 'M006', name: 'Rosa Villanueva', savings: 68000, loanBalance: 0, totalContribution: 68000 },
+-                { id: 'M007', name: 'Miguel Torres', savings: 55000, loanBalance: 95000, totalContribution: 150000 },
+-                { id: 'M008', name: 'Sofia Reyes', savings: 41000, loanBalance: 60000, totalContribution: 101000 },
+-                { id: 'M009', name: 'Roberto Cruz', savings: 78000, loanBalance: 180000, totalContribution: 258000 },
+-                { id: 'M010', name: 'Carmen Lopez', savings: 33000, loanBalance: 45000, totalContribution: 78000 }
+-            ],
+-            loanProfitBreakdown: {
+-                personalLoans: {
+-                    totalAmount: 3200000,
+-                    interestEarned: 480000,
+-                    avgInterestRate: 15
+-                },
+-                businessLoans: {
+-                    totalAmount: 4800000,
+-                    interestEarned: 720000,
+-                    avgInterestRate: 15
+-                },
+-                emergencyLoans: {
+-                    totalAmount: 920000,
+-                    interestEarned: 138000,
+-                    avgInterestRate: 15
++    // Poll statistics periodically to detect under_review increases
++    useEffect(() => {
++        let cancelled = false;
++        const poll = async () => {
++            try {
++                const res = await axios.get('http://localhost:5000/api/loan-review/statistics');
++                if (!cancelled && res.data?.success) {
++                    const under = Number(res.data.statistics?.under_review || 0);
++                    if (under > lastUnderReviewCount) {
++                        const diff = under - lastUnderReviewCount;
++                        setUnderReviewAlert({ visible: true, count: diff });
++                        toast.info(
++                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
++                                <div style={{ fontWeight: 700 }}>There are new applications awaiting manager review</div>
++                                <div style={{ fontSize: 12, color: '#444' }}>{diff} application{diff>1 ? 's' : ''} moved to under-review.</div>
++                                <div style={{ display: 'flex', gap: 8 }}>
++                                    <button className="btn btn-primary" onClick={() => { scrollToPending(); toast.dismiss(); }}>Open</button>
++                                    <button className="btn btn-secondary" onClick={() => toast.dismiss()}>Dismiss</button>
++                                </div>
++                            </div>,
++                            { position: 'top-right', autoClose: false, closeOnClick: false, draggable: false, toastId: `mgr-under-${Date.now()}` }
++                        );
++                        setLastUnderReviewCount(under);
++                    } else if (under < lastUnderReviewCount) {
++                        setLastUnderReviewCount(under);
++                    }
+                 }
+-            },
+-            monthlyTrends: {
+-                savingsGrowth: 3.2,
+-                loanDisbursements: 850000,
+-                collections: 720000,
+-                netGrowth: 2.8
++            } catch (e) {
++                // ignore
+             }
+         };
+-    };
++        // initial run
++        poll();
++        const id = setInterval(poll, 10000);
++        return () => { cancelled = true; clearInterval(id); };
++    }, [lastUnderReviewCount]);
+ 
+-    const handleGenerateReport = async () => {
+-        setIsGeneratingReport(true);
+-        
+-        // Simulate API call delay
+-        setTimeout(() => {
+-            setIsGeneratingReport(false);
+-            setShowReportModal(true);
+-        }, 2000);
+-    };
++    // Socket listener for status updates (if server emits)
++    useEffect(() => {
++        let socket;
++        try {
++            setSocketStatus('connecting');
++            console.log('Manager socket init - attempting to connect to staff socket server');
++            // derive socket URL from current location to avoid mixed-content issues
++            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
++            const hostname = window.location.hostname || 'localhost';
++            const socketUrl = `${protocol}://${hostname}:5000`;
++            console.log('Manager socket will connect to', socketUrl);
++            socket = io(socketUrl);
++            socket.on('connect', () => {
++                console.log('Manager socket connected', socket.id);
++                setSocketStatus('connected');
++                try { socket.emit('join', { role: 'manager' }); console.log('Emitted join for manager'); } catch(e) { console.warn('Emit join failed', e); }
++            });
++            socket.on('connect_error', (err) => { console.error('Manager socket connect_error', err); setSocketStatus('error'); });
++            socket.on('error', (err) => { console.error('Manager socket error', err); setSocketStatus('error'); });
++            socket.on('disconnect', (reason) => { console.log('Manager socket disconnected', reason); setSocketStatus('disconnected'); });
++
++            socket.on('new_application', (payload) => {
++                // if a payload arrives with review_status under_review, notify manager
++                try {
++                    if (payload?.review_status === 'under_review' || payload?.review_status === 'awaiting_manager') {
++                        setUnderReviewAlert({ visible: true, count: (underReviewAlert.count || 0) + 1 });
++                        toast.info(
++                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
++                                <div style={{ fontWeight: 700 }}>Application moved to manager review</div>
++                                <div style={{ fontSize: 12, color: '#444' }}>Application ID: {payload.application_id || 'N/A'}</div>
++                                <div style={{ display: 'flex', gap: 8 }}>
++                                    <button className="btn btn-primary" onClick={() => { scrollToPending(); handleHighlight(payload.application_id); toast.dismiss(); }}>Open</button>
++                                    <button className="btn btn-secondary" onClick={() => toast.dismiss()}>Dismiss</button>
++                                </div>
++                            </div>,
++                            { position: 'top-right', autoClose: false, closeOnClick: false, draggable: false, toastId: `mgr-under-socket-${payload.application_id || Date.now()}` }
++                        );
++                    }
++                } catch (er) { console.error(er); }
++            });
+ 
+-    const downloadReport = (format) => {
+-        const reportData = generateDummyReportData();
+-        
+-        if (format === 'csv') {
+-            downloadCSVReport(reportData);
+-        } else if (format === 'pdf') {
+-            downloadPDFReport(reportData);
++            socket.on('status_change', (payload) => {
++                if (payload?.new_status === 'under_review') {
++                    setUnderReviewAlert({ visible: true, count: (underReviewAlert.count || 0) + 1 });
++                    toast.info(`Application ${payload.application_id} requires your review`, { position: 'top-right', autoClose: 8000 });
++                }
++            });
++        } catch (e) {
++            console.warn('Manager socket init failed', e);
+         }
+-    };
+-
+-    const downloadCSVReport = (data) => {
+-        let csvContent = "Credit Cooperative Financial Report\n";
+-        csvContent += `Report Date: ${data.reportDate}\n\n`;
+-        
+-        // Summary section
+-        csvContent += "MEMBERSHIP SUMMARY\n";
+-        csvContent += "Category,Count\n";
+-        csvContent += `Total Members,${data.summary.totalMembers}\n`;
+-        csvContent += `Active Members,${data.summary.activeMembers}\n`;
+-        csvContent += `Inactive Members,${data.summary.inactiveMembers}\n`;
+-        csvContent += `New Members This Month,${data.summary.newMembersThisMonth}\n\n`;
+-        
+-        // Financial summary
+-        csvContent += "FINANCIAL SUMMARY\n";
+-        csvContent += "Category,Amount (PHP)\n";
+-        csvContent += `Total Savings,${data.financials.totalSavings.toLocaleString()}\n`;
+-        csvContent += `Total Loan Balances,${data.financials.totalLoanBalances.toLocaleString()}\n`;
+-        csvContent += `Total Profit from Loans,${data.financials.totalProfitFromLoans.toLocaleString()}\n`;
+-        csvContent += `Average Savings per Member,${data.financials.averageSavingsPerMember.toLocaleString()}\n`;
+-        csvContent += `Average Loan Balance,${data.financials.averageLoanBalance.toLocaleString()}\n\n`;
+-        
+-        // Member balances
+-        csvContent += "MEMBER BALANCES\n";
+-        csvContent += "Member ID,Name,Savings (PHP),Loan Balance (PHP),Total Contribution (PHP)\n";
+-        data.memberBalances.forEach(member => {
+-            csvContent += `${member.id},${member.name},${member.savings.toLocaleString()},${member.loanBalance.toLocaleString()},${member.totalContribution.toLocaleString()}\n`;
+-        });
+-
+-        const blob = new Blob([csvContent], { type: 'text/csv' });
+-        const url = window.URL.createObjectURL(blob);
+-        const a = document.createElement('a');
+-        a.setAttribute('hidden', '');
+-        a.setAttribute('href', url);
+-        a.setAttribute('download', `financial-report-${new Date().toISOString().split('T')[0]}.csv`);
+-        document.body.appendChild(a);
+-        a.click();
+-        document.body.removeChild(a);
+-    };
+-
+-    const downloadPDFReport = (data) => {
+-        // For PDF generation, you would typically use a library like jsPDF
+-        // For now, we'll create a simplified HTML version that can be printed
+-        const reportWindow = window.open('', '_blank');
+-        const reportHTML = `
+-            <!DOCTYPE html>
+-            <html>
+-            <head>
+-                <title>Financial Report</title>
+-                <style>
+-                    body { font-family: Arial, sans-serif; margin: 20px; }
+-                    .header { text-align: center; margin-bottom: 30px; }
+-                    .section { margin-bottom: 25px; }
+-                    .section h2 { color: #7c3aed; border-bottom: 2px solid #7c3aed; padding-bottom: 5px; }
+-                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+-                    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+-                    th { background-color: #f8f9fa; font-weight: bold; }
+-                    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+-                    .summary-card { background: #f8f9fc; padding: 15px; border-radius: 8px; }
+-                    .amount { font-weight: bold; color: #7c3aed; }
+-                    @media print { body { margin: 0; } }
+-                </style>
+-            </head>
+-            <body>
+-                <div class="header">
+-                    <h1>Credit Cooperative Financial Report</h1>
+-                    <p>Generated on: ${data.reportDate}</p>
+-                </div>
+-                
+-                <div class="section">
+-                    <h2>Membership Summary</h2>
+-                    <div class="summary-grid">
+-                        <div class="summary-card">
+-                            <strong>Total Members:</strong> ${data.summary.totalMembers}<br>
+-                            <strong>Active Members:</strong> ${data.summary.activeMembers}<br>
+-                        </div>
+-                        <div class="summary-card">
+-                            <strong>Inactive Members:</strong> ${data.summary.inactiveMembers}<br>
+-                            <strong>New Members This Month:</strong> ${data.summary.newMembersThisMonth}
+-                        </div>
+-                    </div>
+-                </div>
+-                
+-                <div class="section">
+-                    <h2>Financial Overview</h2>
+-                    <table>
+-                        <tr><th>Category</th><th>Amount (PHP)</th></tr>
+-                        <tr><td>Total Savings</td><td class="amount">₱${data.financials.totalSavings.toLocaleString()}</td></tr>
+-                        <tr><td>Total Loan Balances</td><td class="amount">₱${data.financials.totalLoanBalances.toLocaleString()}</td></tr>
+-                        <tr><td>Total Profit from Loans</td><td class="amount">₱${data.financials.totalProfitFromLoans.toLocaleString()}</td></tr>
+-                        <tr><td>Average Savings per Member</td><td class="amount">₱${data.financials.averageSavingsPerMember.toLocaleString()}</td></tr>
+-                    </table>
+-                </div>
+-                
+-                <div class="section">
+-                    <h2>Top 10 Member Balances</h2>
+-                    <table>
+-                        <tr><th>Member ID</th><th>Name</th><th>Savings</th><th>Loan Balance</th><th>Total Contribution</th></tr>
+-                        ${data.memberBalances.map(member => 
+-                            `<tr>
+-                                <td>${member.id}</td>
+-                                <td>${member.name}</td>
+-                                <td class="amount">₱${member.savings.toLocaleString()}</td>
+-                                <td class="amount">₱${member.loanBalance.toLocaleString()}</td>
+-                                <td class="amount">₱${member.totalContribution.toLocaleString()}</td>
+-                            </tr>`
+-                        ).join('')}
+-                    </table>
+-                </div>
+-                
+-                <div class="section">
+-                    <h2>Loan Profit Breakdown</h2>
+-                    <table>
+-                        <tr><th>Loan Type</th><th>Total Amount</th><th>Interest Earned</th><th>Avg Rate</th></tr>
+-                        <tr><td>Personal Loans</td><td class="amount">₱${data.loanProfitBreakdown.personalLoans.totalAmount.toLocaleString()}</td><td class="amount">₱${data.loanProfitBreakdown.personalLoans.interestEarned.toLocaleString()}</td><td>${data.loanProfitBreakdown.personalLoans.avgInterestRate}%</td></tr>
+-                        <tr><td>Business Loans</td><td class="amount">₱${data.loanProfitBreakdown.businessLoans.totalAmount.toLocaleString()}</td><td class="amount">₱${data.loanProfitBreakdown.businessLoans.interestEarned.toLocaleString()}</td><td>${data.loanProfitBreakdown.businessLoans.avgInterestRate}%</td></tr>
+-                        <tr><td>Emergency Loans</td><td class="amount">₱${data.loanProfitBreakdown.emergencyLoans.totalAmount.toLocaleString()}</td><td class="amount">₱${data.loanProfitBreakdown.emergencyLoans.interestEarned.toLocaleString()}</td><td>${data.loanProfitBreakdown.emergencyLoans.avgInterestRate}%</td></tr>
+-                    </table>
+-                </div>
+-            </body>
+-            </html>
+-        `;
+-        
+-        reportWindow.document.write(reportHTML);
+-        reportWindow.document.close();
+-        
+-        // Trigger print dialog
+-        setTimeout(() => {
+-            reportWindow.print();
+-        }, 1000);
+-    };
+-
+-    const ReportModal = () => {
+-        const data = generateDummyReportData();
+-        
+-        return (
+-            <div className="modal-overlay" onClick={() => setShowReportModal(false)}>
+-                <div className="modal-content report-modal" onClick={(e) => e.stopPropagation()}>
+-                    <div className="modal-header">
+-                        <h2>📊 Financial Report Preview</h2>
+-                        <button className="close-btn" onClick={() => setShowReportModal(false)}>×</button>
+-                    </div>
+-                    
+-                    <div className="modal-body">
+-                        <div className="report-summary">
+-                            <div className="report-date">
+-                                <strong>Report Generated:</strong> {data.reportDate}
+-                            </div>
+-                            
+-                            <div className="summary-grid">
+-                                <div className="summary-section">
+-                                    <h3>📈 Membership Overview</h3>
+-                                    <div className="summary-stats">
+-                                        <div className="stat-item">
+-                                            <span className="stat-label">Total Members:</span>
+-                                            <span className="stat-value">{data.summary.totalMembers.toLocaleString()}</span>
+-                                        </div>
+-                                        <div className="stat-item">
+-                                            <span className="stat-label">Active Members:</span>
+-                                            <span className="stat-value success">{data.summary.activeMembers.toLocaleString()}</span>
+-                                        </div>
+-                                        <div className="stat-item">
+-                                            <span className="stat-label">New This Month:</span>
+-                                            <span className="stat-value info">{data.summary.newMembersThisMonth}</span>
+-                                        </div>
+-                                    </div>
+-                                </div>
+-                                
+-                                <div className="summary-section">
+-                                    <h3>💰 Financial Overview</h3>
+-                                    <div className="summary-stats">
+-                                        <div className="stat-item">
+-                                            <span className="stat-label">Total Savings:</span>
+-                                            <span className="stat-value">₱{data.financials.totalSavings.toLocaleString()}</span>
+-                                        </div>
+-                                        <div className="stat-item">
+-                                            <span className="stat-label">Loan Balances:</span>
+-                                            <span className="stat-value">₱{data.financials.totalLoanBalances.toLocaleString()}</span>
+-                                        </div>
+-                                        <div className="stat-item">
+-                                            <span className="stat-label">Loan Profits:</span>
+-                                            <span className="stat-value success">₱{data.financials.totalProfitFromLoans.toLocaleString()}</span>
+-                                        </div>
+-                                    </div>
+-                                </div>
+-                            </div>
+-                            
+-                            <div className="loan-profit-section">
+-                                <h3>🏦 Loan Profit Breakdown</h3>
+-                                <div className="profit-grid">
+-                                    {Object.entries(data.loanProfitBreakdown).map(([type, details]) => (
+-                                        <div key={type} className="profit-card">
+-                                            <h4>{type.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</h4>
+-                                            <div className="profit-details">
+-                                                <span>Total: ₱{details.totalAmount.toLocaleString()}</span>
+-                                                <span className="profit-earned">Profit: ₱{details.interestEarned.toLocaleString()}</span>
+-                                                <span className="interest-rate">{details.avgInterestRate}% avg rate</span>
+-                                            </div>
+-                                        </div>
+-                                    ))}
+-                                </div>
+-                            </div>
+-                            
+-                            <div className="member-preview">
+-                                <h3>👥 Top 5 Member Balances</h3>
+-                                <div className="member-list">
+-                                    {data.memberBalances.slice(0, 5).map(member => (
+-                                        <div key={member.id} className="member-item">
+-                                            <div className="member-info">
+-                                                <strong>{member.name}</strong> ({member.id})
+-                                            </div>
+-                                            <div className="member-balances">
+-                                                <span>Savings: ₱{member.savings.toLocaleString()}</span>
+-                                                <span>Loan: ₱{member.loanBalance.toLocaleString()}</span>
+-                                            </div>
+-                                        </div>
+-                                    ))}
+-                                </div>
+-                            </div>
+-                        </div>
+-                    </div>
+-                    
+-                    <div className="modal-footer">
+-                        <button className="btn btn-secondary" onClick={() => setShowReportModal(false)}>
+-                            Close Preview
+-                        </button>
+-                        <button className="btn btn-success" onClick={() => downloadReport('csv')}>
+-                            📄 Download CSV
+-                        </button>
+-                        <button className="btn btn-primary" onClick={() => downloadReport('pdf')}>
+-                            📋 Download PDF
+-                        </button>
+-                    </div>
+-=======
+-    const handleGenerateReport = () => {
+-        setShowReports(!showReports);
+-    };
++        return () => { try { if (socket && socket.disconnect) socket.disconnect(); } catch (e) {} };
++    }, []);
+ 
+-    const BarChart = ({ data, label }) => {
+-        const maxValue = Math.max(...Object.values(data));
+-        
+-        return (
+-            <div className="bar-chart">
+-                <h4 className="chart-title">{label}</h4>
+-                <div className="chart-container">
+-                    {Object.entries(data).map(([key, value]) => (
+-                        <div key={key} className="bar-group">
+-                            <div className="bar-wrapper">
+-                                <div 
+-                                    className="bar" 
+-                                    style={{ 
+-                                        height: `${(value / maxValue) * 100}%`,
+-                                        background: 'linear-gradient(135deg, #7c3aed, #a78bfa)'
+-                                    }}
+-                                >
+-                                    <span className="bar-value">{value}</span>
+-                                </div>
+-                            </div>
+-                            <span className="bar-label">{key}</span>
+-                        </div>
+-                    ))}
+-                </div>
+-            </div>
+-        );
++    const scrollToPending = () => {
++        const el = document.querySelector('.activity-list');
++        if (el) {
++            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
++            // add a temporary highlight
++            el.style.transition = 'box-shadow 0.4s ease';
++            el.style.boxShadow = '0 0 0 4px rgba(111, 66, 193, 0.12)';
++            setTimeout(() => { el.style.boxShadow = ''; }, 2500);
++        }
+     };
+ 
+-    const FinancialReportSection = () => {
+-        const depositsData = {};
+-        const loansData = {};
+-        
+-        members.forEach(member => {
+-            depositsData[member.name.split(' ')[0]] = member.totalDeposits / 1000; // in thousands
+-            loansData[member.name.split(' ')[0]] = member.loanBalance / 1000; // in thousands
+-        });
+-
+-        return (
+-            <div className="financial-reports-container">
+-                <div className="reports-header">
+-                    <div>
+-                        <h2>📊 Financial Reports & Analytics</h2>
+-                        <p className="reports-subtitle">Automated financial and member reports</p>
+-                    </div>
+-                    <button className="btn btn-secondary" onClick={handleGenerateReport}>
+-                        ✕ Close
+-                    </button>
+-                </div>
+-
+-                <div className="report-summary-cards">
+-                    <div className="report-card blue">
+-                        <div className="report-icon"><MoneyCheckIcon style={{ width: 32, height: 32 }}/></div>
+-                        <div className="report-content">
+-                            <h4>Total Deposits</h4>
+-                            <span className="report-value">₱{financialData.totalDeposits.toLocaleString()}</span>
+-                            <p className="report-description">All member deposits</p>
+-                        </div>
+-                    </div>
+-                    <div className="report-card orange">
+-                        <div className="report-icon"><ClipboardIcon style={{ width: 32, height: 32 }}/></div>
+-                        <div className="report-content">
+-                            <h4>Total Loan Balance</h4>
+-                            <span className="report-value">₱{financialData.totalLoans.toLocaleString()}</span>
+-                            <p className="report-description">Outstanding loans</p>
+-                        </div>
+-                    </div>
+-                    <div className="report-card green">
+-                        <div className="report-icon"><UserIcon style={{ width: 32, height: 32 }}/></div>
+-                        <div className="report-content">
+-                            <h4>Active Members</h4>
+-                            <span className="report-value">{financialData.activeMembers}</span>
+-                            <p className="report-description">Currently active</p>
+-                        </div>
+-                    </div>
+-                    <div className="report-card purple">
+-                        <div className="report-icon"><BankIcon style={{ width: 32, height: 32 }}/></div>
+-                        <div className="report-content">
+-                            <h4>Average Deposit</h4>
+-                            <span className="report-value">₱{Math.round(financialData.avgDeposit).toLocaleString()}</span>
+-                            <p className="report-description">Per member</p>
+-                        </div>
+-                    </div>
+-                </div>
+-
+-                <div className="charts-grid">
+-                    <div className="chart-card">
+-                        <BarChart data={depositsData} label="Member Deposits (in ₱1000s)" />
+-                        <div className="chart-footer">
+-                            <p>💡 Total deposits across all members</p>
+-                        </div>
+-                    </div>
+-                    <div className="chart-card">
+-                        <BarChart data={loansData} label="Member Loan Balances (in ₱1000s)" />
+-                        <div className="chart-footer">
+-                            <p>💡 Outstanding loan amounts per member</p>
+-                        </div>
+-                    </div>
+-                </div>
+-
+-                <div className="charts-grid">
+-                    <div className="chart-card">
+-                        <BarChart data={financialData.membersByYear} label="Member Growth by Year" />
+-                        <div className="chart-footer">
+-                            <p>💡 New members registered each year</p>
+-                        </div>
+-                    </div>
+-                    <div className="chart-card">
+-                        <div className="member-status-chart">
+-                            <h4 className="chart-title">Member Status Distribution</h4>
+-                            <div className="status-bars">
+-                                <div className="status-bar-item">
+-                                    <div className="status-label">
+-                                        <span className="status-dot active"></span>
+-                                        <span>Active Members</span>
+-                                    </div>
+-                                    <div className="status-bar-container">
+-                                        <div 
+-                                            className="status-bar active-bar"
+-                                            style={{ width: `${(financialData.activeMembers / members.length) * 100}%` }}
+-                                        >
+-                                            <span className="status-count">{financialData.activeMembers}</span>
+-                                        </div>
+-                                    </div>
+-                                </div>
+-                                <div className="status-bar-item">
+-                                    <div className="status-label">
+-                                        <span className="status-dot inactive"></span>
+-                                        <span>Inactive Members</span>
+-                                    </div>
+-                                    <div className="status-bar-container">
+-                                        <div 
+-                                            className="status-bar inactive-bar"
+-                                            style={{ width: `${(financialData.inactiveMembers / members.length) * 100}%` }}
+-                                        >
+-                                            <span className="status-count">{financialData.inactiveMembers}</span>
+-                                        </div>
+-                                    </div>
+-                                </div>
+-                            </div>
+-                        </div>
+-                        <div className="chart-footer">
+-                            <p>💡 Active vs Inactive member ratio</p>
+-                        </div>
+-                    </div>
+-                </div>
+-
+-                <div className="member-details-table">
+-                    <h3>📋 Detailed Member Financial Report</h3>
+-                    <table className="table">
+-                        <thead>
+-                            <tr>
+-                                <th>Member ID</th>
+-                                <th>Name</th>
+-                                <th>Status</th>
+-                                <th>Member Since</th>
+-                                <th>Total Deposits</th>
+-                                <th>Loan Balance</th>
+-                                <th>Net Position</th>
+-                            </tr>
+-                        </thead>
+-                        <tbody>
+-                            {members.map((member) => (
+-                                <tr key={member.id}>
+-                                    <td><span className="member-id">{member.id}</span></td>
+-                                    <td>
+-                                        <div className="member-info">
+-                                            <div className="member-avatar small">
+-                                                {member.name.split(' ').map(n => n[0]).join('')}
+-                                            </div>
+-                                            <span className="member-name">{member.name}</span>
+-                                        </div>
+-                                    </td>
+-                                    <td>
+-                                        <span className={`status-badge status-${member.status}`}>
+-                                            {member.status}
+-                                        </span>
+-                                    </td>
+-                                    <td>{new Date(member.memberSince).toLocaleDateString()}</td>
+-                                    <td className="text-success font-weight-bold">
+-                                        ₱{member.totalDeposits.toLocaleString()}
+-                                    </td>
+-                                    <td className="text-warning font-weight-bold">
+-                                        ₱{member.loanBalance.toLocaleString()}
+-                                    </td>
+-                                    <td className={member.totalDeposits - member.loanBalance >= 0 ? 'text-success' : 'text-danger'}>
+-                                        <strong>₱{(member.totalDeposits - member.loanBalance).toLocaleString()}</strong>
+-                                    </td>
+-                                </tr>
+-                            ))}
+-                        </tbody>
+-                    </table>
+-                </div>
+-
+-                <div className="report-actions">
+-                    <button className="btn btn-primary">
+-                        <span>📄</span>
+-                        Export as PDF
+-                    </button>
+-                    <button className="btn btn-success">
+-                        <span>📊</span>
+-                        Export as Excel
+-                    </button>
+-                    <button className="btn btn-info">
+-                        <span>📧</span>
+-                        Email Report
+-                    </button>
+->>>>>>> backup-before-push
+-                </div>
+-            </div>
+-        );
++    const handleHighlight = (applicationId) => {
++        // optional: find a list item and flash it. We'll gracefully noop if not found.
++        const selector = `.activity-item[data-app-id="${applicationId}"]`;
++        const item = document.querySelector(selector);
++        if (item) {
++            item.style.transition = 'background-color 0.3s ease';
++            const orig = item.style.backgroundColor;
++            item.style.backgroundColor = '#fff3cd';
++            setTimeout(() => { item.style.backgroundColor = orig; }, 2000);
++        }
+     };
+ 
+     return (
+         <div className="dashboard-container">
++            {/* Toast container for manager notifications */}
++            <ToastContainer position="top-right" newestOnTop />
++            {/* DEVELOPMENT: visible debug banner to confirm ManagerDashboard code is running */}
++            <div id="dev-socket-debug" style={{ position: 'fixed', top: 0, left: 0, right: 0, background: '#ff6b6b', color: 'white', padding: '6px 12px', zIndex: 2147483647, textAlign: 'center', fontWeight: 700 }}>
++                DEV SOCKET STATUS: {socketStatus}
++            </div>
+             <div className="dashboard-header">
+                 <h1>Manager Dashboard</h1>
+                 <p className="dashboard-subtitle">
+                     Welcome, {userInfo?.name || 'Manager'}! Oversee operations and drive growth.
+                 </p>
+-                <button 
+-                    className="btn btn-primary generate-report-btn" 
+-                    onClick={handleGenerateReport}
+-                    style={{ marginTop: '1rem' }}
+-                >
+-                    <span>📊</span>
+-                    {showReports ? 'Hide Reports' : 'Generate Report'}
+-                </button>
++            </div>
++            <div style={{ position: 'fixed', top: 16, right: 24, zIndex: 99999, pointerEvents: 'auto' }}>
++                <div style={{ padding: '8px 12px', borderRadius: 18, background: socketStatus === 'connected' ? '#d4ffe0' : socketStatus === 'connecting' ? '#fff4e6' : socketStatus === 'error' ? '#ffe6e6' : '#f1f1f1', border: '1px solid #ddd', fontSize: 13, boxShadow: '0 6px 18px rgba(0,0,0,0.08)' }}>
++                    Socket: <strong style={{ textTransform: 'capitalize' }}>{socketStatus}</strong>
++                </div>
+             </div>
+ 
+-            {showReports && <FinancialReportSection />}
++            {underReviewAlert.visible && (
++                <div style={{ margin: '12px 0', padding: '12px', background: '#fff4e6', border: '1px solid #ffd7a6', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
++                    <div>
++                        <strong>New application{underReviewAlert.count > 1 ? 's' : ''} for manager review</strong>
++                        <div style={{ color: '#666' }}>{underReviewAlert.count} new application{underReviewAlert.count > 1 ? 's' : ''} awaiting your review.</div>
++                    </div>
++                    <div style={{ display: 'flex', gap: 8 }}>
++                        <button className="btn btn-primary" onClick={() => { scrollToPending(); setUnderReviewAlert({ visible: false, count: 0 }); }}>View</button>
++                        <button className="btn btn-secondary" onClick={() => setUnderReviewAlert({ visible: false, count: 0 })}>Dismiss</button>
++                    </div>
++                </div>
++            )}
+ 
+             <div className="stats-grid">
+                 <div className="stat-card primary">
+-                    <div className="stat-icon"><BankIcon style={{ width: 32, height: 32 }}/></div>
++                    <div className="stat-icon">💹</div>
+                     <div className="stat-info">
+                         <h3>Monthly Revenue</h3>
+                         <span className="stat-number">₱{stats.monthlyRevenue.toLocaleString()}</span>
+@@ -655,15 +208,15 @@
+                 </div>
+ 
+                 <div className="stat-card success">
+-                    <div className="stat-icon"><UserIcon style={{ width: 32, height: 32 }}/></div>
++                    <div className="stat-icon">👥</div>
+                     <div className="stat-info">
+                         <h3>Total Members</h3>
+-                        <span className="stat-number">{members.length}</span>
++                        <span className="stat-number">{stats.totalMembers}</span>
+                     </div>
+                 </div>
+ 
+                 <div className="stat-card warning">
+-                    <div className="stat-icon"><ClipboardIcon style={{ width: 32, height: 32 }}/></div>
++                    <div className="stat-icon">📋</div>
+                     <div className="stat-info">
+                         <h3>Loan Applications</h3>
+                         <span className="stat-number">{stats.activeLoanApplications}</span>
+@@ -671,7 +224,7 @@
+                 </div>
+ 
+                 <div className="stat-card info">
+-                    <div className="stat-icon"><MoneyCheckIcon style={{ width: 32, height: 32 }}/></div>
++                    <div className="stat-icon">⭐</div>
+                     <div className="stat-info">
+                         <h3>Staff Performance</h3>
+                         <span className="stat-number">{stats.staffPerformance}%</span>
+@@ -695,15 +248,9 @@
+                             <span className="btn-icon">💰</span>
+                             Loan Approvals
+                         </button>
+-                        <button 
+-                            className="action-btn info" 
+-                            onClick={handleGenerateReport}
+-                            disabled={isGeneratingReport}
+-                        >
+-                            <span className="btn-icon">
+-                                {isGeneratingReport ? '⏳' : '📊'}
+-                            </span>
+-                            {isGeneratingReport ? 'Generating...' : 'Generate Report'}
++                        <button className="action-btn info">
++                            <span className="btn-icon">📊</span>
++                            Financial Analysis
+                         </button>
+                     </div>
+                 </div>
+@@ -753,9 +300,6 @@
+                     </div>
+                 </div>
+             </div>
+-
+-            {/* Report Modal */}
+-            {showReportModal && <ReportModal />}
+         </div>
+     );
+ };
+--- /tmp/credit-coop-system-upstream/staff-portal/src/pages/CreditInvestigatorDashboard.js	2025-11-26 05:41:16.335548447 +0800
++++ /home/soma/Documents/inclusions/credit-coop-system/staff-portal/src/pages/CreditInvestigatorDashboard.js	2025-11-26 02:57:53.657882004 +0800
+@@ -1,10 +1,9 @@
+ 
+ import React, { useEffect, useState } from 'react';
+-import { ReactComponent as HourglassIcon } from '../assets/icons/hourglass-svgrepo-com.svg';
+-import { ReactComponent as MagnifyingGlassIcon } from '../assets/icons/magnifying-glass-svgrepo-com.svg';
+-import { ReactComponent as CheckCircleIcon } from '../assets/icons/check-circle-svgrepo-com.svg';
+-import { ReactComponent as CrossIcon } from '../assets/icons/cross-svgrepo-com.svg';
+ import axios from 'axios';
++import { io } from 'socket.io-client';
++import { toast, ToastContainer } from 'react-toastify';
++import 'react-toastify/dist/ReactToastify.css';
+ import './Dashboard.css';
+ import '../status-badge.css';
+ 
+@@ -19,6 +18,8 @@
+     priority: 'all',
+     search: ''
+   });
++  const [lastPendingCount, setLastPendingCount] = useState(0);
++  const [newSubmissionAlert, setNewSubmissionAlert] = useState({ visible: false, count: 0 });
+ 
+   useEffect(() => {
+     const userInfoRaw = localStorage.getItem('userInfo');
+@@ -34,27 +35,112 @@
+ 
+   useEffect(() => {
+     if (userRole === 'credit_investigator') {
+-      axios.get(`${process.env.REACT_APP_API_URL}/api/loan-review/applications?reviewer_role=credit_investigator`)
++      axios.get('http://localhost:5000/api/loan-review/applications?reviewer_role=credit_investigator')
+         .then(res => {
+           if (res.data.success) {
+             setLoanApplications(res.data.applications);
++            // initialize lastPendingCount from returned applications (pending_review)
++            const pending = (res.data.applications || []).filter(a => a.review_status === 'pending_review').length;
++            setLastPendingCount(pending);
+           } else {
+             setLoanApplications([]);
+           }
+         })
+         .catch(() => setLoanApplications([]));
+-      axios.get(`${process.env.REACT_APP_API_URL}/api/loan-review/statistics`)
++      axios.get('http://localhost:5000/api/loan-review/statistics')
+         .then(res => {
+           if (res.data.success) {
+             setStatistics(res.data.statistics);
++            // also initialize lastPendingCount from statistics if available
++            if (typeof res.data.statistics?.pending_review === 'number') {
++              setLastPendingCount(res.data.statistics.pending_review);
++            }
+           }
+         });
+     }
+   }, [userRole]);
+ 
++  // Socket.io: listen for real-time new_application events
++  useEffect(() => {
++    if (userRole !== 'credit_investigator') return;
++    let socket;
++    try {
++      socket = io('http://localhost:5000');
++      socket.on('connect', () => {
++        console.log('Connected to staff notification socket', socket.id);
++        socket.emit('join', { role: 'credit_investigator' });
++      });
++
++      socket.on('new_application', (payload) => {
++        try {
++          // show a prominent toast and also banner
++          const name = `${payload.first_name || ''} ${payload.last_name || ''}`.trim();
++          const message = name ? `New loan application from ${name}` : 'New loan application received';
++          // large toast with action
++          toast.info(
++            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
++              <div style={{ fontWeight: '700' }}>{message}</div>
++              <div style={{ fontSize: 12, color: '#444' }}>Application ID: {payload.application_id} • Member: {payload.member_number}</div>
++                <div style={{ display: 'flex', gap: 8 }}>
++                <button className="btn btn-primary" onClick={() => { handleReview({ application_id: payload.application_id }); toast.dismiss(); }}>Open</button>
++                <button className="btn btn-secondary" onClick={() => toast.dismiss()}>Dismiss</button>
++              </div>
++            </div>,
++            { position: 'top-right', autoClose: false, closeOnClick: false, draggable: false, toastId: `new-app-${payload.application_id}`, style: { zIndex: 999999 } }
++          );
++
++          // update local state badge/banner
++          setNewSubmissionAlert({ visible: true, count: (newSubmissionAlert.count || 0) + 1 });
++          // optionally prepend to list so investigator sees it immediately
++          setLoanApplications(prev => prev ? [payload, ...prev] : [payload]);
++        } catch (e) {
++          console.error('Error handling new_application socket:', e);
++        }
++      });
++
++      socket.on('connect_error', (err) => console.warn('Socket connect error', err));
++    } catch (err) {
++      console.warn('Socket.io init failed:', err);
++    }
++
++    return () => {
++      try { if (socket && socket.disconnect) socket.disconnect(); } catch (e) {}
++    };
++  }, [userRole]);
++
++  // Poll statistics for new submissions and show alert when new pending applications arrive
++  useEffect(() => {
++    if (userRole !== 'credit_investigator') return;
++    let cancelled = false;
++    const pollInterval = setInterval(async () => {
++      try {
++        const res = await axios.get('http://localhost:5000/api/loan-review/statistics');
++        if (res.data?.success && !cancelled) {
++          const pending = Number(res.data.statistics?.pending_review || 0);
++          // if pending increased compared to last seen, show alert
++          if (pending > lastPendingCount) {
++            setNewSubmissionAlert({ visible: true, count: pending - lastPendingCount });
++            setLastPendingCount(pending);
++          } else if (pending < lastPendingCount) {
++            // update last seen if backlog decreased (someone processed apps)
++            setLastPendingCount(pending);
++          }
++          setStatistics(res.data.statistics);
++        }
++      } catch (err) {
++        // ignore polling errors silently
++      }
++    }, 10000);
++
++    return () => {
++      cancelled = true;
++      clearInterval(pollInterval);
++    };
++  }, [userRole, lastPendingCount]);
++
+   const handleReview = async (application) => {
+     try {
+-      const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/loan-review/applications/${application.application_id}`);
++      const res = await axios.get(`http://localhost:5000/api/loan-review/applications/${application.application_id}`);
+       if (res.data.success) {
+         setSelectedApplication(res.data.application);
+       } else {
+@@ -68,13 +154,13 @@
+   const handleSendToManager = async (applicationId) => {
+     setLoading(true);
+     try {
+-      await axios.post(`${process.env.REACT_APP_API_URL}/api/loan-review/applications/${applicationId}/review`, {
++      await axios.post(`http://localhost:5000/api/loan-review/applications/${applicationId}/review`, {
+         action: 'approve_for_manager',
+         notes: 'Reviewed by credit investigator',
+         reviewer_id: 'credit_investigator',
+       });
+       setSelectedApplication(null);
+-      axios.get(`${process.env.REACT_APP_API_URL}/api/loan-review/applications?reviewer_role=credit_investigator`)
++      axios.get('http://localhost:5000/api/loan-review/applications?reviewer_role=credit_investigator')
+         .then(res => {
+           if (res.data.success) {
+             setLoanApplications(res.data.applications);
+@@ -87,6 +173,23 @@
+     setLoading(false);
+   };
+ 
++  const handleDismissAlert = () => {
++    setNewSubmissionAlert({ visible: false, count: 0 });
++  };
++
++  const handleViewNewSubmissions = async () => {
++    // Refresh applications list and close alert
++    try {
++      const res = await axios.get('http://localhost:5000/api/loan-review/applications?reviewer_role=credit_investigator');
++      if (res.data.success) {
++        setLoanApplications(res.data.applications);
++      }
++    } catch (err) {
++      // ignore
++    }
++    setNewSubmissionAlert({ visible: false, count: 0 });
++  };
++
+   const filteredApplications = loanApplications.filter(app => {
+     const matchesStatus = filter.status === 'all' || app.review_status === filter.status;
+     const matchesPriority = filter.priority === 'all' || app.priority_level === filter.priority;
+@@ -107,38 +210,52 @@
+   return (
+     <div className="dashboard-container credit-investigator-dashboard">
+       <div className="page-header">
+-        <h1> Credit Investigator Dashboard</h1>
++        <h1>🕵️‍♂️ Credit Investigator Dashboard</h1>
+         <p>Review loan applications and send to manager for approval</p>
+       </div>
++      {/* Toast container for real-time notifications */}
++  <ToastContainer position="top-right" newestOnTop />
++      {newSubmissionAlert.visible && (
++        <div className="new-submission-alert" style={{ margin: '12px 0', padding: '12px', background: '#fff4e6', border: '1px solid #ffd7a6', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
++          <div>
++            <strong>New loan application{newSubmissionAlert.count > 1 ? 's' : ''} submitted</strong>
++            <div style={{ color: '#666' }}>{newSubmissionAlert.count} new application{newSubmissionAlert.count > 1 ? 's' : ''} awaiting review.</div>
++          </div>
++          <div style={{ display: 'flex', gap: 8 }}>
++            <button className="btn btn-primary" onClick={handleViewNewSubmissions}>View</button>
++            <button className="btn btn-secondary" onClick={handleDismissAlert}>Dismiss</button>
++          </div>
++        </div>
++      )}
+       <div className="stats-grid">
+-          <div className="stat-card pending">
+-            <div className="stat-icon"><HourglassIcon /></div>
+-            <div className="stat-content">
+-              <h3>Pending Review</h3>
+-              <span className="stat-number">{statistics.pending_review || 0}</span>
+-            </div>
++        <div className="stat-card pending">
++          <div className="stat-icon">⏳</div>
++          <div className="stat-content">
++            <h3>Pending Review</h3>
++            <span className="stat-number">{statistics.pending_review || 0}</span>
+           </div>
+-          <div className="stat-card under-review">
+-            <div className="stat-icon"><MagnifyingGlassIcon /></div>
+-            <div className="stat-content">
+-              <h3>Awaiting Approval</h3>
+-              <span className="stat-number">{statistics.under_review || 0}</span>
+-            </div>
++        </div>
++        <div className="stat-card under-review">
++          <div className="stat-icon">🔍</div>
++          <div className="stat-content">
++            <h3>Awaiting Approval</h3>
++            <span className="stat-number">{statistics.under_review || 0}</span>
+           </div>
+-          <div className="stat-card approved">
+-            <div className="stat-icon"><CheckCircleIcon /></div>
+-            <div className="stat-content">
+-              <h3>Approved</h3>
+-              <span className="stat-number">{statistics.approved || 0}</span>
+-            </div>
++        </div>
++        <div className="stat-card approved">
++          <div className="stat-icon">✅</div>
++          <div className="stat-content">
++            <h3>Approved</h3>
++            <span className="stat-number">{statistics.approved || 0}</span>
+           </div>
+-          <div className="stat-card rejected">
+-            <div className="stat-icon"><CrossIcon /></div>
+-            <div className="stat-content">
+-              <h3>Rejected</h3>
+-              <span className="stat-number">{statistics.rejected || 0}</span>
+-            </div>
++        </div>
++        <div className="stat-card rejected">
++          <div className="stat-icon">❌</div>
++          <div className="stat-content">
++            <h3>Rejected</h3>
++            <span className="stat-number">{statistics.rejected || 0}</span>
+           </div>
++        </div>
+       </div>
+       <div className="filters-section">
+         <div className="filter-group">
+@@ -190,24 +307,30 @@
+               {filteredApplications.length === 0 ? (
+                 <tr><td colSpan={6}>No loan applications to review.</td></tr>
+               ) : (
+-                filteredApplications.map(app => (
+-                  <tr key={app.application_id}>
+-                    <td>{app.application_id}</td>
+-                    <td>{app.applicant_name || `${app.first_name} ${app.middle_name} ${app.last_name}`}</td>
+-                    <td>{app.member_number}</td>
+-                    <td>
+-                      <span className={`status-badge ${app.review_status === 'active' ? 'status-active' : ''}`}> 
+-                        {app.review_status.replace('_', ' ').toUpperCase()}
+-                      </span>
+-                    </td>
+-                    <td>{new Date(app.submitted_at).toLocaleDateString()}</td>
+-                    <td>
+-                      <button className="btn btn-primary btn-sm" onClick={() => handleReview(app)}>
+-                        {app.review_status === 'approved' ? 'View Review' : 'Review'}
+-                      </button>
+-                    </td>
+-                  </tr>
+-                ))
++                filteredApplications.map(app => {
++                  // ensure we never call string methods on undefined
++                  const rawStatus = app.review_status ?? app.status ?? 'unknown';
++                  const displayStatus = String(rawStatus).replace(/_/g, ' ').toUpperCase();
++                  const badgeClass = (rawStatus === 'active') ? 'status-active' : '';
++                  return (
++                    <tr key={app.application_id}>
++                      <td>{app.application_id}</td>
++                      <td>{app.applicant_name || `${app.first_name} ${app.middle_name} ${app.last_name}`}</td>
++                      <td>{app.member_number}</td>
++                      <td>
++                        <span className={`status-badge ${badgeClass}`}>
++                          {displayStatus}
++                        </span>
++                      </td>
++                      <td>{app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : 'N/A'}</td>
++                      <td>
++                        <button className="btn btn-primary btn-sm" onClick={() => handleReview(app)}>
++                          {rawStatus === 'approved' ? 'View Review' : 'Review'}
++                        </button>
++                      </td>
++                    </tr>
++                  );
++                })
+               )}
+             </tbody>
+           </table>
+@@ -284,80 +407,10 @@
+                   {loading ? 'Sending...' : 'Send to Manager for Approval'}
+                 </button>
+               )}
+-              {/* Loan Officer can input loan amount if approved by manager */}
++              {/* Loan amount assignment has moved to the Administrator dashboard. */}
+               {selectedApplication.review_status === 'approved' && (
+                 <div style={{width: '100%', marginTop: '1rem'}}>
+-                  <h4>Set Loan Amount & Calculate Deductions</h4>
+-                  <div className="info-grid">
+-                    <div className="info-item">
+-                      <label>Loan Amount:</label>
+-                      <input type="number" min="0" step="0.01" style={{width: '120px'}} value={selectedApplication.loan_amount || ''}
+-                        onChange={e => setSelectedApplication({...selectedApplication, loan_amount: e.target.value})} />
+-                    </div>
+-                    <div className="info-item">
+-                      <label>Loan Duration:</label>
+-                      <span>
+-                        {selectedApplication.loan_type === 'quick' ? '6 months' : selectedApplication.loan_type === 'regular' ? '12 months' : 'N/A'}
+-                      </span>
+-                    </div>
+-                  </div>
+-                  {/* Deductions Calculation Section */}
+-                  {selectedApplication.loan_amount && (
+-                    (() => {
+-                      const amount = parseFloat(selectedApplication.loan_amount) || 0;
+-                      const months = selectedApplication.loan_type === 'quick' ? 6 : 12;
+-                      const serviceFee = amount * 0.03;
+-                      const shareCapital = amount * 0.03;
+-                      const insurance = (amount * months) / 1000;
+-                      // Monthly Payment Calculation
+-                      const annualInterestRate = 0.12; // Example: 12% annual
+-                      const monthlyInterestRate = annualInterestRate / 12;
+-                      const n = months;
+-                      const P = amount;
+-                      const r = monthlyInterestRate;
+-                      const monthlyPayment = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+-                      // Net proceeds
+-                      const netProceeds = amount - serviceFee - shareCapital - insurance;
+-                      return (
+-                        <div className="deductions-section" style={{marginTop: '1rem'}}>
+-                          <h5>Deductions</h5>
+-                          <div>Service Fee (3%): ₱{serviceFee.toFixed(2)}</div>
+-                          <div>Share Capital (3%): ₱{shareCapital.toFixed(2)}</div>
+-                          <div>Insurance: ₱{insurance.toFixed(2)}</div>
+-                          <div>Net Proceeds: <b>₱{netProceeds.toFixed(2)}</b></div>
+-                          <h5 style={{marginTop: '1rem'}}>Monthly Payment</h5>
+-                          <div>Monthly Payment: <b>₱{monthlyPayment.toFixed(2)}</b></div>
+-                        </div>
+-                      );
+-                    })()
+-                  )}
+-                  <button className="btn btn-primary" style={{marginTop: '1rem'}} onClick={() => {
+-                    // Save loan amount logic here (API call)
+-                    const amount = parseFloat(selectedApplication.loan_amount) || 0;
+-                    const months = selectedApplication.loan_type === 'quick' ? 6 : 12;
+-                    const serviceFee = amount * 0.03;
+-                    const shareCapital = amount * 0.03;
+-                    const insurance = (amount * months) / 1000;
+-                    const netProceeds = amount - serviceFee - shareCapital - insurance;
+-                    const annualInterestRate = 0.12;
+-                    const monthlyInterestRate = annualInterestRate / 12;
+-                    const n = months;
+-                    const P = amount;
+-                    const r = monthlyInterestRate;
+-                    const monthlyPayment = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+-                    axios.post(`${process.env.REACT_APP_API_URL}/api/loan-review/applications/${selectedApplication.application_id}/set-loan-amount`, {
+-                      loan_amount: netProceeds,
+-                      loan_duration: months,
+-                      monthly_payment: monthlyPayment
+-                    }).then(() => {
+-                      alert('Loan amount and deductions saved!');
+-                      setSelectedApplication(null);
+-                    }).catch(() => {
+-                      alert('Error saving loan amount');
+-                    });
+-                  }}>
+-                    Save Loan Amount
+-                  </button>
++                  <p><em>Loan amount assignment and deductions calculation are handled by administrators. Please forward this application to an admin for finalization.</em></p>
+                 </div>
+               )}
+               <button className="btn btn-secondary" onClick={() => setSelectedApplication(null)}>Cancel</button>
+--- /tmp/credit-coop-system-upstream/staff-portal/server/index.js	2025-11-26 05:41:16.332648359 +0800
++++ /home/soma/Documents/inclusions/credit-coop-system/staff-portal/server/index.js	2025-11-26 04:23:50.393326039 +0800
+@@ -1,11 +1,28 @@
+ const express = require('express');
+ const app = express();
+ const cors = require('cors');
++const http = require('http');
++const { Server } = require('socket.io');
++
++// Create HTTP server so we can attach socket.io
++const server = http.createServer(app);
++const io = new Server(server, { cors: { origin: '*' } });
+ 
+ //middleware
+ app.use(express.json()); //req body
+ app.use(cors());
+ 
++// Socket.io connection logging
++io.on('connection', (socket) => {
++  console.log('Socket connected:', socket.id);
++  socket.on('join', (data) => {
++    try {
++      if (data && data.role) socket.join(String(data.role));
++    } catch (e) {}
++  });
++  socket.on('disconnect', () => console.log('Socket disconnected:', socket.id));
++});
++
+ //ROUTES
+ 
+ //register and login routes
+@@ -18,20 +35,66 @@
+ //loan review routes
+ app.use('/api/loan-review', require('./routes/loanReview'));
+ 
+-// membership applications routes
+-app.use('/api/membership-applications', require('./routes/memberApplications'));
+-
+ // payment reference routes
+ app.use('/api/payments', require('./routes/payments'));
+ app.use('/api/user-management', require('./routes/userManagement'));
++// accounts (savings/checking) routes
++app.use('/api/accounts', require('./routes/accounts'));
+ 
+ // invoice routes
+ app.use('/api/invoices', require('./routes/invoices'));
+ 
+ // member import routes
+ app.use('/api', require('./routes/importMembers'));
++// Notification endpoint used by other services (e.g., member portal) to notify staff
++app.post('/api/notify/new-application', (req, res) => {
++  try {
++    const payload = req.body || {};
++    console.log('Notify endpoint hit; payload:', JSON.stringify(payload));
++    // Emit to all connected staff clients; also emit to role-specific room if provided
++    io.emit('new_application', payload);
++    if (payload && payload.notify_role) {
++      io.to(String(payload.notify_role)).emit('new_application', payload);
++      try {
++        const roomSet = io.sockets.adapter.rooms.get(String(payload.notify_role));
++        const clientsInRoom = roomSet ? roomSet.size : 0;
++        console.log(`Emitted to room '${String(payload.notify_role)}' - clients in room: ${clientsInRoom}`);
++      } catch (e) {
++        console.warn('Could not inspect room set:', e);
++      }
++    }
++    try {
++      const totalClients = io.of('/').sockets.size;
++      console.log('Total connected socket clients:', totalClients);
++    } catch (e) {}
++    return res.json({ success: true });
++  } catch (err) {
++    console.error('Failed to emit new_application:', err);
++    return res.status(500).json({ success: false, message: 'Failed to notify' });
++  }
++});
++
++// Debug endpoint: return socket state (connected clients and rooms)
++app.get('/api/debug/socket-state', (req, res) => {
++  try {
++    const totalClients = io.of('/').sockets.size;
++    const rooms = [];
++    for (const [roomName, sids] of io.sockets.adapter.rooms.entries()) {
++      rooms.push({ roomName, clients: sids.size });
++    }
++    return res.json({ success: true, totalClients, rooms });
++  } catch (err) {
++    console.error('Failed to get socket state:', err);
++    return res.status(500).json({ success: false, message: 'Failed to get socket state' });
++  }
++});
+ 
+-const PORT = process.env.PORT || 5000;
+-app.listen(PORT, () => {
+-  console.log(`Server is running on port ${PORT}`);
++// Serve a simple static test page for socket connectivity
++const path = require('path');
++app.get('/test-socket', (req, res) => {
++  res.sendFile(path.join(__dirname, 'test-socket.html'));
+ });
++
++server.listen(5000, () => {
++  console.log('Server (with socket.io) is running on port 5000');
++});
+\ No newline at end of file
+--- /tmp/credit-coop-system-upstream/staff-portal/package.json	2025-11-26 05:41:16.329865756 +0800
++++ /home/soma/Documents/inclusions/credit-coop-system/staff-portal/package.json	2025-11-20 11:17:15.002751521 +0800
+@@ -2,7 +2,6 @@
+   "name": "staff-portal",
+   "version": "0.1.0",
+   "private": true,
+-  "homepage": ".",
+   "dependencies": {
+     "@testing-library/dom": "^10.4.0",
+     "@testing-library/jest-dom": "^6.6.3",
+@@ -10,7 +9,6 @@
+     "@testing-library/user-event": "^13.5.0",
+     "axios": "^1.13.1",
+     "bcrypt": "^6.0.0",
+-    "chart.js": "^4.5.1",
+     "cors": "^2.8.5",
+     "dotenv": "^17.2.2",
+     "express": "^5.1.0",
+@@ -20,11 +18,11 @@
+     "multer": "^2.0.2",
+     "pg": "^8.16.3",
+     "react": "^19.1.0",
+-    "react-chartjs-2": "^5.3.1",
+     "react-dom": "^19.1.0",
+     "react-router-dom": "^7.7.1",
+     "react-scripts": "5.0.1",
+-    "serve": "^14.2.0",
++  "socket.io-client": "^4.8.1",
++    "react-toastify": "^11.0.5",
+     "web-vitals": "^2.1.4",
+     "xlsx": "^0.18.5"
+   },

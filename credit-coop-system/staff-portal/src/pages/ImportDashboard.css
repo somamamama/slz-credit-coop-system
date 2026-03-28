@@ -1,0 +1,138 @@
+.import-section {
+    padding: 1rem;
+}
+
+.file-upload-container {
+    margin: 2rem 0;
+    text-align: center;
+}
+
+.file-input {
+    display: none;
+}
+
+.file-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: var(--primary-color);
+    color: white;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.file-label:hover {
+    background: var(--primary-dark);
+}
+
+.file-info {
+    margin-top: 1rem;
+    color: var(--gray-600);
+}
+
+.preview-section {
+    margin-top: 2rem;
+}
+
+.preview-table-container {
+    margin: 1rem 0;
+    overflow-x: auto;
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--card-shadow);
+}
+
+.preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+.preview-table th,
+.preview-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.preview-table th {
+    background: var(--gray-50);
+    font-weight: 600;
+    color: var(--gray-700);
+}
+
+.preview-table tr:last-child td {
+    border-bottom: none;
+}
+
+.preview-note {
+    color: var(--gray-500);
+    font-size: 0.9rem;
+    margin: 1rem 0;
+}
+
+.import-btn {
+    margin-top: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.error-message {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: var(--danger-light);
+    color: var(--danger);
+    border-radius: var(--border-radius);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.import-stats {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--gray-200);
+}
+
+.import-stats h3 {
+    margin-bottom: 1rem;
+    color: var(--gray-800);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .import-section {
+        padding: 0.5rem;
+    }
+
+    .preview-table-container {
+        margin: 0.5rem -1rem;
+        border-radius: 0;
+    }
+}

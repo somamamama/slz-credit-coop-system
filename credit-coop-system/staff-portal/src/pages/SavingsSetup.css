@@ -1,0 +1,65 @@
+/* Styles for SavingsSetup inputs to match the provided visual */
+
+.savings-select,
+.savings-input,
+.savings-number {
+  width: 100%;
+  /* limit length so controls are a little shorter on wide screens */
+  max-width: 640px;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e6e9ee;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: none;
+  font-size: 0.95rem;
+  color: #111827;
+  outline: none;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.savings-select:focus,
+.savings-input:focus,
+.savings-number:focus {
+  box-shadow: 0 6px 18px rgba(16,24,40,0.06);
+  border-color: rgba(37,99,235,0.12);
+}
+
+.savings-input::placeholder {
+  color: #9ca3af;
+}
+
+/* number input: keep native arrows but visually align to right with small inset */
+.savings-number {
+  padding-right: 2.5rem; /* room for arrows */
+}
+
+/* for WebKit browsers, hide native spinner if desired and show a subtle custom icon */
+.savings-number::-webkit-inner-spin-button,
+.savings-number::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Optional: small spinner glyph as background (non-interactive) */
+.savings-number {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='7 13 12 18 17 13'/%3E%3Cpolyline points='7 6 12 11 17 6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px 14px;
+}
+
+/* make labels a bit bolder and smaller spacing */
+.savings-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+/* small helper text */
+.savings-help {
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
+  color: #6b7280;
+}

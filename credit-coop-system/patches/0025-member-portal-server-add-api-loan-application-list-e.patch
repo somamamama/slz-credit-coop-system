@@ -1,0 +1,68 @@
+From 9cea50dbe1b7e3a1af5f005d396eecb1d3f66d92 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Tue, 25 Nov 2025 22:14:41 +0800
+Subject: [PATCH 25/37] member-portal(server): add /api/loan-application/list
+ endpoint to return applications by user_id (fix 500 when 'list' matched param
+ route)
+
+---
+ member-portal/server/index.js | 43 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 43 insertions(+)
+
+diff --git a/member-portal/server/index.js b/member-portal/server/index.js
+index a6c4b11..24fe318 100644
+--- a/member-portal/server/index.js
++++ b/member-portal/server/index.js
+@@ -282,6 +282,49 @@ app.get('/api/loan-applications/user/:email', async (req, res) => {
+     }
+ });
+ 
++// Get loan applications (by user_id query) - compatibility endpoint used by frontend
++app.get('/api/loan-application/list', async (req, res) => {
++  try {
++    const { user_id } = req.query;
++
++    let query = `
++      SELECT
++        application_id,
++        user_id,
++        member_number,
++        loan_type,
++        membership_type,
++        first_name,
++        last_name,
++        status,
++        submitted_at,
++        reviewed_at,
++        date_filed,
++        mobile_number,
++        email_address,
++        loan_amount,
++        amount,
++        requested_amount
++      FROM loan_applications
++    `;
++
++    const params = [];
++    if (user_id) {
++      query += ' WHERE user_id = $1';
++      params.push(user_id);
++    }
++
++    query += ' ORDER BY submitted_at DESC';
++
++    const result = await pool.query(query, params);
++
++    res.json({ success: true, applications: result.rows });
++  } catch (error) {
++    console.error('Error in /api/loan-application/list:', error);
++    res.status(500).json({ success: false, message: 'Error fetching loan applications', error: error.message });
++  }
++});
++
+ // Get detailed loan application by ID
+ app.get('/api/loan-application/:application_id', async (req, res) => {
+     try {
+-- 
+2.51.1
+

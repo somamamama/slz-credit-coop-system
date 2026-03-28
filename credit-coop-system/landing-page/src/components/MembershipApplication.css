@@ -1,0 +1,463 @@
+.membership-application {
+  padding: 5rem 0;
+  background: var(--gray-50);
+}
+
+.membership-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  margin-top: 3rem;
+}
+
+.benefits-section h3 {
+  color: var(--primary-purple);
+  font-size: 1.8rem;
+  margin-bottom: 2rem;
+  font-weight: 600;
+}
+
+.benefits-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+.benefit-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: var(--white);
+  border-radius: var(--border-radius);
+  box-shadow: var(--card-shadow);
+  border-left: 4px solid var(--primary-purple-light);
+  transition: all 0.3s ease;
+}
+
+.benefit-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--card-shadow-hover);
+}
+
+.benefit-icon {
+  font-size: 2rem;
+  margin-top: 0.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  flex-shrink: 0;
+}
+
+.benefit-icon svg {
+  width: 2rem;
+  height: 2rem;
+  fill: var(--primary-purple);
+}
+
+.benefit-item h4 {
+  color: var(--primary-purple);
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.benefit-item p {
+  color: var(--gray-600);
+  margin: 0;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.application-form {
+  /* stronger surface so it clearly contrasts with the white page background */
+  background: #f3f4f6; /* light gray surface */
+  padding: 2.5rem;
+  border-radius: calc(var(--border-radius) + 4px);
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  height: fit-content;
+  position: relative;
+}
+
+/* Decorative accent on the left to increase separation and brand recognition */
+/* removed decorative purple accent bar per request */
+
+.application-form h3 {
+  color: var(--primary-purple);
+  font-size: 1.8rem;
+  margin-bottom: 2rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-row.three-cols {
+  grid-template-columns: 2fr 1fr 1fr;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--gray-700);
+  font-weight: 500;
+}
+
+/* Info icon and tooltip for small contextual help */
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 8px;
+  background: var(--gray-100);
+  color: var(--primary-purple);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: default;
+  position: relative;
+}
+
+.info-icon:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(139,92,246,0.12);
+}
+
+.info-icon .tooltip {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 220px;
+  max-width: 320px;
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  color: var(--gray-800);
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(16,24,40,0.08);
+  font-size: 0.85rem;
+  line-height: 1.3;
+  z-index: 40;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  transform-origin: top center;
+}
+
+/* Place the info icon beside the select (drop bar) - icon sits outside the control */
+.select-with-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.select-with-info select {
+  flex: 1;
+  padding-right: 0; /* no extra inset, icon is outside */
+}
+
+.select-with-info .info-icon {
+  position: relative;
+  margin-left: 0;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.info-icon:hover .tooltip,
+.info-icon:focus .tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(2px);
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 0.8rem;
+  border: 2px solid var(--gray-300);
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  font-family: inherit;
+  background: var(--white);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary-purple-light);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  margin-top: 0.2rem;
+}
+
+.checkbox-group label {
+  margin: 0;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.submit-btn {
+  width: 100%;
+  background: var(--gradient-primary);
+  color: var(--white);
+  padding: 1rem 2rem;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 1rem;
+}
+
+.submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(124, 58, 237, 0.3);
+}
+
+.form-note {
+  font-size: 0.85rem;
+  color: var(--gray-600);
+  text-align: center;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Form Sections */
+.form-section {
+  margin-bottom: 2.5rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.form-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 1.5rem;
+}
+
+.form-section h4 {
+  color: var(--primary-purple);
+  font-size: 1.3rem;
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-section h4::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  background: var(--gray-200);
+  border-radius: 2px;
+}
+
+.conditional-section {
+  background: var(--gray-50);
+  padding: 1.5rem;
+  border-radius: var(--border-radius);
+  margin-top: 1rem;
+  border-left: 4px solid var(--gray-200);
+}
+
+.conditional-section h5 {
+  color: var(--primary-purple);
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.form-group input[type="file"] {
+  padding: 0.5rem;
+  border: 2px dashed var(--gray-300);
+  background: var(--gray-50);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.form-group input[type="file"]:hover {
+  border-color: var(--primary-purple-light);
+  background: var(--white);
+}
+
+.form-group small {
+  color: var(--gray-500);
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  display: block;
+}
+
+/* Special form row layouts */
+.form-row.four-cols {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
+.form-row.three-cols {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+  .membership-application {
+    padding: 3rem 0;
+  }
+
+  .membership-content {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+  }
+
+  .benefits-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .application-form {
+    padding: 2rem 1.5rem;
+  }
+
+  .form-row,
+  .form-row.three-cols,
+  .form-row.four-cols {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .benefit-item {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .benefit-icon {
+    font-size: 1.5rem;
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .benefit-icon svg {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .form-section {
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .conditional-section {
+    padding: 1rem;
+  }
+}
+
+/* File Preview Styles */
+.file-preview {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: var(--gray-100);
+  border-radius: var(--border-radius-sm);
+  border-left: 3px solid var(--primary-purple);
+}
+
+.file-preview p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--gray-700);
+  font-weight: 500;
+}
+
+/* File Input Enhancements */
+input[type="file"] {
+  padding: 0.5rem 0;
+  background: transparent;
+  border: 2px dashed var(--gray-300);
+  border-radius: var(--border-radius-sm);
+  transition: border-color 0.3s ease;
+}
+
+input[type="file"]:focus {
+  border-color: var(--primary-purple);
+  outline: none;
+}
+
+input[type="file"]:hover {
+  border-color: var(--primary-purple-light);
+}
+
+/* File input label styling */
+.form-group label[for*="Document"],
+.form-group label[for*="Image"] {
+  font-weight: 600;
+  color: var(--primary-purple);
+}
+
+.form-group small {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--gray-600);
+  font-style: italic;
+}
+
+/* Form Note Styling */
+.form-note {
+  padding: 1rem;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--border-radius-sm);
+  margin-top: 1rem;
+}
+
+.form-note p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--gray-600);
+  text-align: center;
+  font-style: italic;
+}
+
+/* Enhanced document upload section */
+.form-section h4 {
+  border-bottom: 2px solid var(--primary-purple-light);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* ID type selection highlight */
+select[name="identificationType"]:focus {
+  border-color: var(--primary-purple);
+  box-shadow: 0 0 0 3px rgba(139, 69, 19, 0.1);
+}

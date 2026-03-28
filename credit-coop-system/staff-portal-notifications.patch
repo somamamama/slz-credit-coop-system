@@ -1,0 +1,1007 @@
+*** Begin Patch
+*** Add File: staff-portal-notifications.patch
++This patch file bundles the changes made to the staff-portal for socket notifications.
++
++Files included:
++- staff-portal/src/pages/ManagerDashboard.js
++- staff-portal/src/pages/CreditInvestigatorDashboard.js
++- staff-portal/server/index.js
++- staff-portal/server/test-socket.html
++- staff-portal/scripts/notify_manager.sh
++- staff-portal/package.json
++
++NOTE: This is a simple bundle format. If you prefer a standard unified git patch, you can convert these sections into a git-style unified diff.
++
++----- BEGIN FILE: staff-portal/src/pages/ManagerDashboard.js -----
++import React, { useState, useEffect } from 'react';
++import '../pages/Dashboard.css';
++import { io } from 'socket.io-client';
++import axios from 'axios';
++import { toast, ToastContainer } from 'react-toastify';
++import 'react-toastify/dist/ReactToastify.css';
++
++const ManagerDashboard = ({ setAuth }) => {
++    const [userInfo, setUserInfo] = useState(null);
++    const [stats, setStats] = useState({
++        monthlyRevenue: 0,
++        totalMembers: 0,
++        activeLoanApplications: 0,
++        staffPerformance: 0
++    });
++    const [lastUnderReviewCount, setLastUnderReviewCount] = useState(0);
++    const [underReviewAlert, setUnderReviewAlert] = useState({ visible: false, count: 0 });
++    const [socketStatus, setSocketStatus] = useState('disconnected');
++
++    useEffect(() => {
++        console.log('ManagerDashboard mounted');
++        const fetchUserInfo = async () => {
++            try {
++                const response = await fetch("http://localhost:5000/auth/profile", {
++                    method: "GET",
++                    headers: { 
++                        "Content-Type": "application/json",
++                        "token": localStorage.token 
++                    }
++                });
++
++                if (response.ok) {
++                    const userData = await response.json();
++                    setUserInfo(userData);
++                }
++            } catch (err) {
++                console.error("Error fetching user info:", err);
++            }
++        };
++
++        fetchUserInfo();
++        // initial stats for under_review
++        (async () => {
++            try {
++                const r = await axios.get('http://localhost:5000/api/loan-review/statistics');
++                if (r.data?.success) {
++                    const under = Number(r.data.statistics?.under_review || 0);
++                    setLastUnderReviewCount(under);
++                    setStats(prev => ({ ...prev, activeLoanApplications: r.data.statistics?.pending_review || prev.activeLoanApplications }));
++                }
++            } catch (e) {}
++        })();
++    }, []);
++
++    // Poll statistics periodically to detect under_review increases
++    useEffect(() => {
++        let cancelled = false;
++        const poll = async () => {
++            try {
++                const res = await axios.get('http://localhost:5000/api/loan-review/statistics');
++                if (!cancelled && res.data?.success) {
++                    const under = Number(res.data.statistics?.under_review || 0);
++                    if (under > lastUnderReviewCount) {
++                        const diff = under - lastUnderReviewCount;
++                        setUnderReviewAlert({ visible: true, count: diff });
++                        toast.info(
++                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
++                                <div style={{ fontWeight: 700 }}>There are new applications awaiting manager review</div>
++                                <div style={{ fontSize: 12, color: '#444' }}>{diff} application{diff>1 ? 's' : ''} moved to under-review.</div>
++                                <div style={{ display: 'flex', gap: 8 }}>
++                                    <button className="btn btn-primary" onClick={() => { scrollToPending(); toast.dismiss(); }}>Open</button>
++                                    <button className="btn btn-secondary" onClick={() => toast.dismiss()}>Dismiss</button>
++                                </div>
++                            </div>,
++                            { position: 'top-right', autoClose: false, closeOnClick: false, draggable: false, toastId: `mgr-under-${Date.now()}` }
++                        );
++                        setLastUnderReviewCount(under);
++                    } else if (under < lastUnderReviewCount) {
++                        setLastUnderReviewCount(under);
++                    }
++                }
++            } catch (e) {
++                // ignore
++            }
++        };
++        // initial run
++        poll();
++        const id = setInterval(poll, 10000);
++        return () => { cancelled = true; clearInterval(id); };
++    }, [lastUnderReviewCount]);
++
++    // Socket listener for status updates (if server emits)
++    useEffect(() => {
++        let socket;
++        try {
++            setSocketStatus('connecting');
++            console.log('Manager socket init - attempting to connect to staff socket server');
++            // derive socket URL from current location to avoid mixed-content issues
++            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
++            const hostname = window.location.hostname || 'localhost';
++            const socketUrl = `${protocol}://${hostname}:5000`;
++            console.log('Manager socket will connect to', socketUrl);
++            socket = io(socketUrl);
++            socket.on('connect', () => {
++                console.log('Manager socket connected', socket.id);
++                setSocketStatus('connected');
++                try { socket.emit('join', { role: 'manager' }); console.log('Emitted join for manager'); } catch(e) { console.warn('Emit join failed', e); }
++            });
++            socket.on('connect_error', (err) => { console.error('Manager socket connect_error', err); setSocketStatus('error'); });
++            socket.on('error', (err) => { console.error('Manager socket error', err); setSocketStatus('error'); });
++            socket.on('disconnect', (reason) => { console.log('Manager socket disconnected', reason); setSocketStatus('disconnected'); });
++
++            socket.on('new_application', (payload) => {
++                // if a payload arrives with review_status under_review, notify manager
++                try {
++                    if (payload?.review_status === 'under_review' || payload?.review_status === 'awaiting_manager') {
++                        setUnderReviewAlert({ visible: true, count: (underReviewAlert.count || 0) + 1 });
++                        toast.info(
++                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
++                                <div style={{ fontWeight: 700 }}>Application moved to manager review</div>
++                                <div style={{ fontSize: 12, color: '#444' }}>Application ID: {payload.application_id || 'N/A'}</div>
++                                <div style={{ display: 'flex', gap: 8 }}>
++                                    <button className="btn btn-primary" onClick={() => { scrollToPending(); handleHighlight(payload.application_id); toast.dismiss(); }}>Open</button>
++                                    <button className="btn btn-secondary" onClick={() => toast.dismiss()}>Dismiss</button>
++                                </div>
++                            </div>,
++                            { position: 'top-right', autoClose: false, closeOnClick: false, draggable: false, toastId: `mgr-under-socket-${payload.application_id || Date.now()}` }
++                        );
++                    }
++                } catch (er) { console.error(er); }
++            });
++
++            socket.on('status_change', (payload) => {
++                if (payload?.new_status === 'under_review') {
++                    setUnderReviewAlert({ visible: true, count: (underReviewAlert.count || 0) + 1 });
++                    toast.info(`Application ${payload.application_id} requires your review`, { position: 'top-right', autoClose: 8000 });
++                }
++            });
++        } catch (e) {
++            console.warn('Manager socket init failed', e);
++        }
++        return () => { try { if (socket && socket.disconnect) socket.disconnect(); } catch (e) {} };
++    }, []);
++
++    const scrollToPending = () => {
++        const el = document.querySelector('.activity-list');
++        if (el) {
++            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
++            // add a temporary highlight
++            el.style.transition = 'box-shadow 0.4s ease';
++            el.style.boxShadow = '0 0 0 4px rgba(111, 66, 193, 0.12)';
++            setTimeout(() => { el.style.boxShadow = ''; }, 2500);
++        }
++    };
++
++    const handleHighlight = (applicationId) => {
++        // optional: find a list item and flash it. We'll gracefully noop if not found.
++        const selector = `.activity-item[data-app-id="${applicationId}"]`;
++        const item = document.querySelector(selector);
++        if (item) {
++            item.style.transition = 'background-color 0.3s ease';
++            const orig = item.style.backgroundColor;
++            item.style.backgroundColor = '#fff3cd';
++            setTimeout(() => { item.style.backgroundColor = orig; }, 2000);
++        }
++    };
++
++    return (
++        <div className="dashboard-container">
++            {/* Toast container for manager notifications */}
++            <ToastContainer position="top-right" newestOnTop />
++            {/* DEVELOPMENT: visible debug banner to confirm ManagerDashboard code is running */}
++            <div id="dev-socket-debug" style={{ position: 'fixed', top: 0, left: 0, right: 0, background: '#ff6b6b', color: 'white', padding: '6px 12px', zIndex: 2147483647, textAlign: 'center', fontWeight: 700 }}>
++                DEV SOCKET STATUS: {socketStatus}
++            </div>
++            <div className="dashboard-header">
++                <h1>Manager Dashboard</h1>
++                <p className="dashboard-subtitle">
++                    Welcome, {userInfo?.name || 'Manager'}! Oversee operations and drive growth.
++                </p>
++            </div>
++            <div style={{ position: 'fixed', top: 16, right: 24, zIndex: 99999, pointerEvents: 'auto' }}>
++                <div style={{ padding: '8px 12px', borderRadius: 18, background: socketStatus === 'connected' ? '#d4ffe0' : socketStatus === 'connecting' ? '#fff4e6' : socketStatus === 'error' ? '#ffe6e6' : '#f1f1f1', border: '1px solid #ddd', fontSize: 13, boxShadow: '0 6px 18px rgba(0,0,0,0.08)' }}>
++                    Socket: <strong style={{ textTransform: 'capitalize' }}>{socketStatus}</strong>
++                </div>
++            </div>
++
++            {underReviewAlert.visible && (
++                <div style={{ margin: '12px 0', padding: '12px', background: '#fff4e6', border: '1px solid #ffd7a6', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
++                    <div>
++                        <strong>New application{underReviewAlert.count > 1 ? 's' : ''} for manager review</strong>
++                        <div style={{ color: '#666' }}>{underReviewAlert.count} new application{underReviewAlert.count > 1 ? 's' : ''} awaiting your review.</div>
++                    </div>
++                    <div style={{ display: 'flex', gap: 8 }}>
++                        <button className="btn btn-primary" onClick={() => { scrollToPending(); setUnderReviewAlert({ visible: false, count: 0 }); }}>View</button>
++                        <button className="btn btn-secondary" onClick={() => setUnderReviewAlert({ visible: false, count: 0 })}>Dismiss</button>
++                    </div>
++                </div>
++            )}
++
++            <div className="stats-grid">
++                <div className="stat-card primary">
++                    <div className="stat-icon">💹</div>
++                    <div className="stat-info">
++                        <h3>Monthly Revenue</h3>
++                        <span className="stat-number">₱{stats.monthlyRevenue.toLocaleString()}</span>
++                    </div>
++                </div>
++
++                <div className="stat-card success">
++                    <div className="stat-icon">👥</div>
++                    <div className="stat-info">
++                        <h3>Total Members</h3>
++                        <span className="stat-number">{stats.totalMembers}</span>
++                    </div>
++                </div>
++
++                <div className="stat-card warning">
++                    <div className="stat-icon">📋</div>
++                    <div className="stat-info">
++                        <h3>Loan Applications</h3>
++                        <span className="stat-number">{stats.activeLoanApplications}</span>
++                    </div>
++                </div>
++
++                <div className="stat-card info">
++                    <div className="stat-icon">⭐</div>
++                    <div className="stat-info">
++                        <h3>Staff Performance</h3>
++                        <span className="stat-number">{stats.staffPerformance}%</span>
++                    </div>
++                </div>
++            </div>
++
++            <div className="dashboard-grid">
++                <div className="dashboard-section">
++                    <h2>Management Tools</h2>
++                    <div className="action-buttons">
++                        <button className="action-btn primary">
++                            <span className="btn-icon">👥</span>
++                            Staff Management
++                        </button>
++                        <button className="action-btn success">
++                            <span className="btn-icon">📈</span>
++                            Performance Reports
++                        </button>
++                        <button className="action-btn warning">
++                            <span className="btn-icon">💰</span>
++                            Loan Approvals
++                        </button>
++                        <button className="action-btn info">
++                            <span className="btn-icon">📊</span>
++                            Financial Analysis
++                        </button>
++                    </div>
++                </div>
++
++                <div className="dashboard-section">
++                    <h2>Key Metrics</h2>
++                    <div className="quick-actions">
++                        <div className="quick-action-item">
++                            <span className="action-icon">📊</span>
++                            <div className="action-content">
++                                <h4>Monthly Report</h4>
++                                <p>View detailed analytics</p>
++                            </div>
++                        </div>
++                        <div className="quick-action-item">
++                            <span className="action-icon">💼</span>
++                            <div className="action-content">
++                                <h4>Portfolio Overview</h4>
++                                <p>Loan portfolio status</p>
++                            </div>
++                        </div>
++                        <div className="quick-action-item">
++                            <span className="action-icon">🎯</span>
++                            <div className="action-content">
++                                <h4>Target Progress</h4>
++                                <p>Track monthly goals</p>
++                            </div>
++                        </div>
++                    </div>
++                </div>
++
++                <div className="dashboard-section">
++                    <h2>Pending Approvals</h2>
++                    <div className="activity-list">
++                        <div className="activity-item">
++                            <span className="activity-time">Priority</span>
++                            <span className="activity-desc">Loan Application - ₱500,000 - Review Required</span>
++                        </div>
++                        <div className="activity-item">
++                            <span className="activity-time">Medium</span>
++                            <span className="activity-desc">Staff Leave Request - John Doe - 3 days</span>
++                        </div>
++                        <div className="activity-item">
++                            <span className="activity-time">Low</span>
++                            <span className="activity-desc">Equipment Purchase - Office Supplies</span>
++                        </div>
++                    </div>
++                </div>
++            </div>
++        </div>
++    );
++};
++
++export default ManagerDashboard;
++
++----- END FILE: staff-portal/src/pages/ManagerDashboard.js -----
++
++----- BEGIN FILE: staff-portal/src/pages/CreditInvestigatorDashboard.js -----
++```javascript
++
++import React, { useEffect, useState } from 'react';
++import axios from 'axios';
++import { io } from 'socket.io-client';
++import { toast, ToastContainer } from 'react-toastify';
++import 'react-toastify/dist/ReactToastify.css';
++import './Dashboard.css';
++import '../status-badge.css';
++
++const CreditInvestigatorDashboard = () => {
++  const [loanApplications, setLoanApplications] = useState([]);
++  const [selectedApplication, setSelectedApplication] = useState(null);
++  const [loading, setLoading] = useState(false);
++  const [userRole, setUserRole] = useState('');
++  const [statistics, setStatistics] = useState({});
++  const [filter, setFilter] = useState({
++    status: 'all',
++    priority: 'all',
++    search: ''
++  });
++  const [lastPendingCount, setLastPendingCount] = useState(0);
++  const [newSubmissionAlert, setNewSubmissionAlert] = useState({ visible: false, count: 0 });
++
++  useEffect(() => {
++    const userInfoRaw = localStorage.getItem('userInfo');
++    if (userInfoRaw) {
++      try {
++        const userInfo = JSON.parse(userInfoRaw);
++        setUserRole(userInfo.role || '');
++      } catch {
++        setUserRole('');
++      }
++    }
++  }, []);
++
++  useEffect(() => {
++    if (userRole === 'credit_investigator') {
++      axios.get('http://localhost:5000/api/loan-review/applications?reviewer_role=credit_investigator')
++        .then(res => {
++          if (res.data.success) {
++            setLoanApplications(res.data.applications);
++            // initialize lastPendingCount from returned applications (pending_review)
++            const pending = (res.data.applications || []).filter(a => a.review_status === 'pending_review').length;
++            setLastPendingCount(pending);
++          } else {
++            setLoanApplications([]);
++          }
++        })
++        .catch(() => setLoanApplications([]));
++      axios.get('http://localhost:5000/api/loan-review/statistics')
++        .then(res => {
++          if (res.data.success) {
++            setStatistics(res.data.statistics);
++            // also initialize lastPendingCount from statistics if available
++            if (typeof res.data.statistics?.pending_review === 'number') {
++              setLastPendingCount(res.data.statistics.pending_review);
++            }
++          }
++        });
++    }
++  }, [userRole]);
++
++  // Socket.io: listen for real-time new_application events
++  useEffect(() => {
++    if (userRole !== 'credit_investigator') return;
++    let socket;
++    try {
++      socket = io('http://localhost:5000');
++      socket.on('connect', () => {
++        console.log('Connected to staff notification socket', socket.id);
++        socket.emit('join', { role: 'credit_investigator' });
++      });
++
++      socket.on('new_application', (payload) => {
++        try {
++          // show a prominent toast and also banner
++          const name = `${payload.first_name || ''} ${payload.last_name || ''}`.trim();
++          const message = name ? `New loan application from ${name}` : 'New loan application received';
++          // large toast with action
++          toast.info(
++            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
++              <div style={{ fontWeight: '700' }}>{message}</div>
++              <div style={{ fontSize: 12, color: '#444' }}>Application ID: {payload.application_id} • Member: {payload.member_number}</div>
++                <div style={{ display: 'flex', gap: 8 }}>
++                <button className="btn btn-primary" onClick={() => { handleReview({ application_id: payload.application_id }); toast.dismiss(); }}>Open</button>
++                <button className="btn btn-secondary" onClick={() => toast.dismiss()}>Dismiss</button>
++              </div>
++            </div>,
++            { position: 'top-right', autoClose: false, closeOnClick: false, draggable: false, toastId: `new-app-${payload.application_id}`, style: { zIndex: 999999 } }
++          );
++
++          // update local state badge/banner
++          setNewSubmissionAlert({ visible: true, count: (newSubmissionAlert.count || 0) + 1 });
++          // optionally prepend to list so investigator sees it immediately
++          setLoanApplications(prev => prev ? [payload, ...prev] : [payload]);
++        } catch (e) {
++          console.error('Error handling new_application socket:', e);
++        }
++      });
++
++      socket.on('connect_error', (err) => console.warn('Socket connect error', err));
++    } catch (err) {
++      console.warn('Socket.io init failed:', err);
++    }
++
++    return () => {
++      try { if (socket && socket.disconnect) socket.disconnect(); } catch (e) {}
++    };
++  }, [userRole]);
++
++  // Poll statistics for new submissions and show alert when new pending applications arrive
++  useEffect(() => {
++    if (userRole !== 'credit_investigator') return;
++    let cancelled = false;
++    const pollInterval = setInterval(async () => {
++      try {
++        const res = await axios.get('http://localhost:5000/api/loan-review/statistics');
++        if (res.data?.success && !cancelled) {
++          const pending = Number(res.data.statistics?.pending_review || 0);
++          // if pending increased compared to last seen, show alert
++          if (pending > lastPendingCount) {
++            setNewSubmissionAlert({ visible: true, count: pending - lastPendingCount });
++            setLastPendingCount(pending);
++          } else if (pending < lastPendingCount) {
++            // update last seen if backlog decreased (someone processed apps)
++            setLastPendingCount(pending);
++          }
++          setStatistics(res.data.statistics);
++        }
++      } catch (err) {
++        // ignore polling errors silently
++      }
++    }, 10000);
++
++    return () => {
++      cancelled = true;
++      clearInterval(pollInterval);
++    };
++  }, [userRole, lastPendingCount]);
++
++  const handleReview = async (application) => {
++    try {
++      const res = await axios.get(`http://localhost:5000/api/loan-review/applications/${application.application_id}`);
++      if (res.data.success) {
++        setSelectedApplication(res.data.application);
++      } else {
++        setSelectedApplication(application);
++      }
++    } catch {
++      setSelectedApplication(application);
++    }
++  };
++
++  const handleSendToManager = async (applicationId) => {
++    setLoading(true);
++    try {
++      await axios.post(`http://localhost:5000/api/loan-review/applications/${applicationId}/review`, {
++        action: 'approve_for_manager',
++        notes: 'Reviewed by credit investigator',
++        reviewer_id: 'credit_investigator',
++      });
++      setSelectedApplication(null);
++      axios.get('http://localhost:5000/api/loan-review/applications?reviewer_role=credit_investigator')
++        .then(res => {
++          if (res.data.success) {
++            setLoanApplications(res.data.applications);
++          } else {
++            setLoanApplications([]);
++          }
++        })
++        .catch(() => setLoanApplications([]));
++    } catch (err) {}
++    setLoading(false);
++  };
++
++  const handleDismissAlert = () => {
++    setNewSubmissionAlert({ visible: false, count: 0 });
++  };
++
++  const handleViewNewSubmissions = async () => {
++    // Refresh applications list and close alert
++    try {
++      const res = await axios.get('http://localhost:5000/api/loan-review/applications?reviewer_role=credit_investigator');
++      if (res.data.success) {
++        setLoanApplications(res.data.applications);
++      }
++    } catch (err) {
++      // ignore
++    }
++    setNewSubmissionAlert({ visible: false, count: 0 });
++  };
++
++  const filteredApplications = loanApplications.filter(app => {
++    const matchesStatus = filter.status === 'all' || app.review_status === filter.status;
++    const matchesPriority = filter.priority === 'all' || app.priority_level === filter.priority;
++    const matchesSearch = (app.applicant_name || '').toLowerCase().includes(filter.search.toLowerCase()) ||
++      app.application_id.toString().includes(filter.search);
++    return matchesStatus && matchesPriority && matchesSearch;
++  });
++
++  if (userRole !== 'credit_investigator') {
++    return (
++      <div className="dashboard-container">
++        <h2>Access Denied</h2>
++        <p>You do not have permission to view this dashboard.</p>
++      </div>
++    );
++  }
++
++  return (
++    <div className="dashboard-container credit-investigator-dashboard">
++      <div className="page-header">
++        <h1>🕵️‍♂️ Credit Investigator Dashboard</h1>
++        <p>Review loan applications and send to manager for approval</p>
++      </div>
++      {/* Toast container for real-time notifications */}
++  <ToastContainer position="top-right" newestOnTop />
++      {newSubmissionAlert.visible && (
++        <div className="new-submission-alert" style={{ margin: '12px 0', padding: '12px', background: '#fff4e6', border: '1px solid #ffd7a6', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
++          <div>
++            <strong>New loan application{newSubmissionAlert.count > 1 ? 's' : ''} submitted</strong>
++            <div style={{ color: '#666' }}>{newSubmissionAlert.count} new application{newSubmissionAlert.count > 1 ? 's' : ''} awaiting review.</div>
++          </div>
++          <div style={{ display: 'flex', gap: 8 }}>
++            <button className="btn btn-primary" onClick={handleViewNewSubmissions}>View</button>
++            <button className="btn btn-secondary" onClick={handleDismissAlert}>Dismiss</button>
++          </div>
++        </div>
++      )}
++      <div className="stats-grid">
++        <div className="stat-card pending">
++          <div className="stat-icon">⏳</div>
++          <div className="stat-content">
++            <h3>Pending Review</h3>
++            <span className="stat-number">{statistics.pending_review || 0}</span>
++          </div>
++        </div>
++        <div className="stat-card under-review">
++          <div className="stat-icon">🔍</div>
++          <div className="stat-content">
++            <h3>Awaiting Approval</h3>
++            <span className="stat-number">{statistics.under_review || 0}</span>
++          </div>
++        </div>
++        <div className="stat-card approved">
++          <div className="stat-icon">✅</div>
++          <div className="stat-content">
++            <h3>Approved</h3>
++            <span className="stat-number">{statistics.approved || 0}</span>
++          </div>
++        </div>
++        <div className="stat-card rejected">
++          <div className="stat-icon">❌</div>
++          <div className="stat-content">
++            <h3>Rejected</h3>
++            <span className="stat-number">{statistics.rejected || 0}</span>
++          </div>
++        </div>
++      </div>
++      <div className="filters-section">
++        <div className="filter-group">
++          <input
++            type="text"
++            placeholder="Search applications..."
++            value={filter.search}
++            onChange={e => setFilter({ ...filter, search: e.target.value })}
++            className="search-input"
++          />
++          <select
++            value={filter.status}
++            onChange={e => setFilter({ ...filter, status: e.target.value })}
++            className="filter-select"
++          >
++            <option value="all">All Status</option>
++            <option value="pending_review">Pending Review</option>
++            <option value="under_review">Awaiting Approval</option>
++            <option value="approved">Approved</option>
++            <option value="rejected">Rejected</option>
++            <option value="returned">Returned</option>
++          </select>
++          <select
++            value={filter.priority}
++            onChange={e => setFilter({ ...filter, priority: e.target.value })}
++            className="filter-select"
++          >
++            <option value="all">All Priority</option>
++            <option value="high">High</option>
++            <option value="medium">Medium</option>
++            <option value="low">Low</option>
++          </select>
++        </div>
++      </div>
++      <div className="applications-section">
++        <div className="table-container">
++          <table className="applications-table">
++            <thead>
++              <tr>
++                <th>Application ID</th>
++                <th>Applicant Name</th>
++                <th>Member Number</th>
++                <th>Status</th>
++                <th>Submitted</th>
++                <th>Actions</th>
++              </tr>
++            </thead>
++            <tbody>
++              {filteredApplications.length === 0 ? (
++                <tr><td colSpan={6}>No loan applications to review.</td></tr>
++              ) : (
++                filteredApplications.map(app => {
++                  // ensure we never call string methods on undefined
++                  const rawStatus = app.review_status ?? app.status ?? 'unknown';
++                  const displayStatus = String(rawStatus).replace(/_/g, ' ').toUpperCase();
++                  const badgeClass = (rawStatus === 'active') ? 'status-active' : '';
++                  return (
++                    <tr key={app.application_id}>
++                      <td>{app.application_id}</td>
++                      <td>{app.applicant_name || `${app.first_name} ${app.middle_name} ${app.last_name}`}</td>
++                      <td>{app.member_number}</td>
++                      <td>
++                        <span className={`status-badge ${badgeClass}`}>
++                          {displayStatus}
++                        </span>
++                      </td>
++                      <td>{app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : 'N/A'}</td>
++                      <td>
++                        <button className="btn btn-primary btn-sm" onClick={() => handleReview(app)}>
++                          {rawStatus === 'approved' ? 'View Review' : 'Review'}
++                        </button>
++                      </td>
++                    </tr>
++                  );
++                })
++              )}
++            </tbody>
++          </table>
++        </div>
++      </div>
++      {selectedApplication && (
++        <div className="modal-overlay">
++          <div className="modal-content">
++            <div className="modal-header">
++              <h2>Review Application #{selectedApplication.application_id}</h2>
++              <button className="close-btn" onClick={() => setSelectedApplication(null)}>✕</button>
++            </div>
++            <div className="modal-body">
++              {/* Application Details */}
++              <div className="detail-section">
++                <h3>Application Details</h3>
++                <div className="info-grid">
++                  <div className="info-item"><label>Application ID:</label> <span>{selectedApplication.application_id}</span></div>
++                  <div className="info-item"><label>Member Number:</label> <span>{selectedApplication.member_number}</span></div>
++                  <div className="info-item"><label>Status:</label> <span>{selectedApplication.status}</span></div>
++                  <div className="info-item"><label>Submitted At:</label> <span>{selectedApplication.submitted_at ? new Date(selectedApplication.submitted_at).toLocaleString() : 'N/A'}</span></div>
++                  <div className="info-item"><label>Reviewed At:</label> <span>{selectedApplication.reviewed_at ? new Date(selectedApplication.reviewed_at).toLocaleString() : 'N/A'}</span></div>
++                  <div className="info-item"><label>Reviewed By:</label> <span>{selectedApplication.reviewed_by || 'N/A'}</span></div>
++                </div>
++              </div>
++              {/* Applicant Information */}
++              <div className="detail-section">
++                <h3>Applicant Information</h3>
++                <div className="info-grid">
++                  <div className="info-item"><label>Name:</label> <span>{selectedApplication.applicant_name || `${selectedApplication.first_name} ${selectedApplication.middle_name} ${selectedApplication.last_name}`}</span></div>
++                  <div className="info-item"><label>Gender:</label> <span>{selectedApplication.gender}</span></div>
++                  <div className="info-item"><label>Civil Status:</label> <span>{selectedApplication.civil_status}</span></div>
++                  <div className="info-item"><label>Birth Date:</label> <span>{selectedApplication.birth_date ? new Date(selectedApplication.birth_date).toLocaleString() : 'N/A'}</span></div>
++                  <div className="info-item"><label>Landline:</label> <span>{selectedApplication.landline}</span></div>
++                  <div className="info-item"><label>Mobile Number:</label> <span>{selectedApplication.mobile_number}</span></div>
++                  <div className="info-item"><label>Email Address:</label> <span>{selectedApplication.email_address}</span></div>
++                  <div className="info-item"><label>Facebook Account:</label> <span>{selectedApplication.facebook_account ? (<a href={`https://facebook.com/${selectedApplication.facebook_account}`} target="_blank" rel="noopener noreferrer">{selectedApplication.facebook_account}</a>) : 'N/A'}</span></div>
++                </div>
++              </div>
++              {/* Address Information */}
++              <div className="detail-section">
++                <h3>Address Information</h3>
++                <div className="info-grid">
++                  <div className="info-item"><label>Current Address:</label> <span>{selectedApplication.current_address}</span></div>
++                  <div className="info-item"><label>Years of Stay (Current):</label> <span>{selectedApplication.years_of_stay_current}</span></div>
++                  <div className="info-item"><label>Permanent Address:</label> <span>{selectedApplication.permanent_address}</span></div>
++                  <div className="info-item"><label>Years of Stay (Permanent):</label> <span>{selectedApplication.years_of_stay_permanent}</span></div>
++                  <div className="info-item"><label>Home Ownership:</label> <span>{selectedApplication.home_ownership}</span></div>
++                </div>
++              </div>
++              {/* Family Information */}
++              <div className="detail-section">
++                <h3>Family Information</h3>
++                <div className="info-grid">
++                  <div className="info-item"><label>Spouse Name:</label> <span>{selectedApplication.spouse_name}</span></div>
++                  <div className="info-item"><label>Number of Children:</label> <span>{selectedApplication.number_of_children}</span></div>
++                </div>
++              </div>
++              {/* Employment Information */}
++              <div className="detail-section">
++                <h3>Employment Information</h3>
++                <div className="info-grid">
++                  <div className="info-item"><label>Date Hired:</label> <span>{selectedApplication.date_hired ? new Date(selectedApplication.date_hired).toLocaleString() : 'N/A'}</span></div>
++                  <div className="info-item"><label>Company/Business:</label> <span>{selectedApplication.company_business}</span></div>
++                  <div className="info-item"><label>Contract Period:</label> <span>{selectedApplication.contract_period}</span></div>
++                  <div className="info-item"><label>Designation/Position:</label> <span>{selectedApplication.designation_position}</span></div>
++                  <div className="info-item"><label>Years in Company:</label> <span>{selectedApplication.years_in_company}</span></div>
++                </div>
++              </div>
++            </div>
++            <div className="modal-footer">
++              {selectedApplication.review_status !== 'approved' && (
++                <button className="btn btn-primary" onClick={() => handleSendToManager(selectedApplication.application_id)} disabled={loading}>
++                  {loading ? 'Sending...' : 'Send to Manager for Approval'}
++                </button>
++              )}
++              {/* Loan amount assignment has moved to the Administrator dashboard. */}
++              {selectedApplication.review_status === 'approved' && (
++                <div style={{width: '100%', marginTop: '1rem'}}>
++                  <p><em>Loan amount assignment and deductions calculation are handled by administrators. Please forward this application to an admin for finalization.</em></p>
++                </div>
++              )}
++              <button className="btn btn-secondary" onClick={() => setSelectedApplication(null)}>Cancel</button>
++            </div>
++          </div>
++        </div>
++      )}
++    </div>
++  );
++};
++
++export default CreditInvestigatorDashboard;
++
++```
++
++----- END FILE: staff-portal/src/pages/CreditInvestigatorDashboard.js -----
++
++----- BEGIN FILE: staff-portal/server/index.js -----
++const express = require('express');
++const app = express();
++const cors = require('cors');
++const http = require('http');
++const { Server } = require('socket.io');
++
++// Create HTTP server so we can attach socket.io
++const server = http.createServer(app);
++const io = new Server(server, { cors: { origin: '*' } });
++
++//middleware
++app.use(express.json()); //req body
++app.use(cors());
++
++// Socket.io connection logging
++io.on('connection', (socket) => {
++  console.log('Socket connected:', socket.id);
++  socket.on('join', (data) => {
++    try {
++      if (data && data.role) socket.join(String(data.role));
++    } catch (e) {}
++  });
++  socket.on('disconnect', () => console.log('Socket disconnected:', socket.id));
++});
++
++//ROUTES
++
++//register and login routes
++
++app.use('/auth', require('./routes/coopauth'));
++
++//dashboard route
++app.use('/dashboard', require('./routes/dashboardauth'));
++
++//loan review routes
++app.use('/api/loan-review', require('./routes/loanReview'));
++
++// payment reference routes
++app.use('/api/payments', require('./routes/payments'));
++app.use('/api/user-management', require('./routes/userManagement'));
++// accounts (savings/checking) routes
++app.use('/api/accounts', require('./routes/accounts'));
++
++// invoice routes
++app.use('/api/invoices', require('./routes/invoices'));
++
++// member import routes
++app.use('/api', require('./routes/importMembers'));
++// Notification endpoint used by other services (e.g., member portal) to notify staff
++app.post('/api/notify/new-application', (req, res) => {
++  try {
++    const payload = req.body || {};
++    console.log('Notify endpoint hit; payload:', JSON.stringify(payload));
++    // Emit to all connected staff clients; also emit to role-specific room if provided
++    io.emit('new_application', payload);
++    if (payload && payload.notify_role) {
++      io.to(String(payload.notify_role)).emit('new_application', payload);
++      try {
++        const roomSet = io.sockets.adapter.rooms.get(String(payload.notify_role));
++        const clientsInRoom = roomSet ? roomSet.size : 0;
++        console.log(`Emitted to room '${String(payload.notify_role)}' - clients in room: ${clientsInRoom}`);
++      } catch (e) {
++        console.warn('Could not inspect room set:', e);
++      }
++    }
++    try {
++      const totalClients = io.of('/').sockets.size;
++      console.log('Total connected socket clients:', totalClients);
++    } catch (e) {}
++    return res.json({ success: true });
++  } catch (err) {
++    console.error('Failed to emit new_application:', err);
++    return res.status(500).json({ success: false, message: 'Failed to notify' });
++  }
++});
++
++// Debug endpoint: return socket state (connected clients and rooms)
++app.get('/api/debug/socket-state', (req, res) => {
++  try {
++    const totalClients = io.of('/').sockets.size;
++    const rooms = [];
++    for (const [roomName, sids] of io.sockets.adapter.rooms.entries()) {
++      rooms.push({ roomName, clients: sids.size });
++    }
++    return res.json({ success: true, totalClients, rooms });
++  } catch (err) {
++    console.error('Failed to get socket state:', err);
++    return res.status(500).json({ success: false, message: 'Failed to get socket state' });
++  }
++});
++
++// Serve a simple static test page for socket connectivity
++const path = require('path');
++app.get('/test-socket', (req, res) => {
++  res.sendFile(path.join(__dirname, 'test-socket.html'));
++});
++
++server.listen(5000, () => {
++  console.log('Server (with socket.io) is running on port 5000');
++});
++
++----- END FILE: staff-portal/server/index.js -----
++
++----- BEGIN FILE: staff-portal/server/test-socket.html -----
++<!doctype html>
++<html>
++<head>
++  <meta charset="utf-8" />
++  <title>Socket Test - Manager</title>
++  <style>body{font-family:Arial,sans-serif;padding:12px} #log{white-space:pre-wrap;background:#f7f7f7;padding:12px;border-radius:6px;min-height:120px}</style>
++</head>
++<body>
++  <h2>Socket Test Page</h2>
++  <p>This page connects to the staff socket server and joins the <code>manager</code> room. Use this to verify connectivity independent of the React frontend.</p>
++  <div><button id="emitNotify">Send test notify (POST /api/notify/new-application)</button></div>
++  <h3>Socket status: <span id="status">(not connected)</span></h3>
++  <div id="log"></div>
++  <script src="/socket.io/socket.io.js"></script>
++  <script>
++    (function(){
++      function log(m){
++        var el = document.getElementById('log');
++        el.textContent = (new Date()).toLocaleTimeString() + ' - ' + m + '\n' + el.textContent;
++      }
++      try{
++        var socket = io();
++        document.getElementById('status').textContent = 'connecting...';
++        socket.on('connect', function(){ document.getElementById('status').textContent = 'connected ('+socket.id+')'; log('connected '+socket.id); try{ socket.emit('join',{role:'manager'}); log('emitted join manager'); }catch(e){ log('emit join failed: '+e); } });
++        socket.on('connect_error', function(err){ document.getElementById('status').textContent = 'connect_error'; log('connect_error '+err); });
++        socket.on('disconnect', function(r){ document.getElementById('status').textContent = 'disconnected'; log('disconnected '+r); });
++        socket.on('new_application', function(p){ log('new_application received: ' + JSON.stringify(p)); alert('new_application: ' + (p.application_id || p.member_number || 'unknown')); });
++      }catch(err){ log('socket init failed: '+err); }
++
++      document.getElementById('emitNotify').addEventListener('click', function(){
++        fetch('/api/notify/new-application', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ application_id: 9999, member_number: 'TEST999', first_name: 'Tester', last_name: 'Manual', review_status: 'under_review', notify_role: 'manager' }) })
++          .then(function(r){ return r.json(); }).then(function(j){ log('notify POST response: ' + JSON.stringify(j)); }).catch(function(e){ log('notify POST failed: '+e); });
++      });
++    })();
++  </script>
++</body>
++</html>
++
++----- END FILE: staff-portal/server/test-socket.html -----
++
++----- BEGIN FILE: staff-portal/scripts/notify_manager.sh -----
++#!/bin/sh
++# notify_manager.sh
++# Simple helper to POST a new_application payload that will notify manager clients.
++# Usage:
++#   ./notify_manager.sh [application_id] [member_number] [first_name] [last_name]
++# Environment:
++#   HOST - base url for staff server (default: http://localhost:5000)
++
++HOST=${HOST:-http://localhost:5000}
++APPLICATION_ID=${1:-999}
++MEMBER_NUMBER=${2:-MEM0001}
++FIRST_NAME=${3:-Auto}
++LAST_NAME=${4:-Notify}
++
++PAYLOAD_FILE=$(mktemp /tmp/notify.XXXX.json)
++cat > "$PAYLOAD_FILE" <<EOF
++{
++  "application_id": ${APPLICATION_ID},
++  "member_number": "${MEMBER_NUMBER}",
++  "first_name": "${FIRST_NAME}",
++  "last_name": "${LAST_NAME}",
++  "review_status": "under_review",
++  "notify_role": "manager"
++}
++EOF
++
++echo "Posting notification to ${HOST}/api/notify/new-application"
++echo "Payload:"
++cat "$PAYLOAD_FILE"
++
++echo
++curl -v -X POST "${HOST}/api/notify/new-application" \
++  -H "Content-Type: application/json" \
++  -d @"${PAYLOAD_FILE}"
++
++# cleanup
++rm -f "$PAYLOAD_FILE"
++
++----- END FILE: staff-portal/scripts/notify_manager.sh -----
++
++----- BEGIN FILE: staff-portal/package.json -----
++{
++  "name": "staff-portal",
++  "version": "0.1.0",
++  "private": true,
++  "dependencies": {
++    "@testing-library/dom": "^10.4.0",
++    "@testing-library/jest-dom": "^6.6.3",
++    "@testing-library/react": "^16.3.0",
++    "@testing-library/user-event": "^13.5.0",
++    "axios": "^1.13.1",
++    "bcrypt": "^6.0.0",
++    "cors": "^2.8.5",
++    "dotenv": "^17.2.2",
++    "express": "^5.1.0",
++    "jsonwebtoken": "^9.0.2",
++    "jspdf": "^3.0.3",
++    "jspdf-autotable": "^5.0.2",
++    "multer": "^2.0.2",
++    "pg": "^8.16.3",
++    "react": "^19.1.0",
++    "react-dom": "^19.1.0",
++    "react-router-dom": "^7.7.1",
++    "react-scripts": "5.0.1",
++  "socket.io-client": "^4.8.1",
++    "react-toastify": "^11.0.5",
++    "web-vitals": "^2.1.4",
++    "xlsx": "^0.18.5"
++  },
++  "scripts": {
++    "start": "react-scripts start",
++    "build": "react-scripts build",
++    "test": "react-scripts test",
++    "eject": "react-scripts eject"
++  },
++  "eslintConfig": {
++    "extends": [
++      "react-app",
++      "react-app/jest"
++    ]
++  },
++  "browserslist": {
++    "production": [
++      ">0.2%",
++      "not dead",
++      "not op_mini all"
++    ],
++    "development": [
++      "last 1 chrome version",
++      "last 1 firefox version",
++      "last 1 safari version"
++    ]
++  },
++  "description": "This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).",
++  "main": "index.js",
++  "keywords": [],
++  "author": "",
++  "license": "ISC"
++}
++
++----- END FILE: staff-portal/package.json -----
++
+*** End Patch
++

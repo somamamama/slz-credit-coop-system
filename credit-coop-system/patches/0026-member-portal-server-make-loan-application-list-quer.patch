@@ -1,0 +1,29 @@
+From 1a712a558f2ca9800d46ae82301e7fec56046dc3 Mon Sep 17 00:00:00 2001
+From: somamamama <22-06543@g.batstate-u.edu.ph>
+Date: Tue, 25 Nov 2025 22:18:18 +0800
+Subject: [PATCH 26/37] member-portal(server): make loan-application list query
+ robust by comparing user_id::text to avoid type mismatch (UUID vs integer)
+
+---
+ member-portal/server/index.js | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/member-portal/server/index.js b/member-portal/server/index.js
+index 24fe318..36b5bdf 100644
+--- a/member-portal/server/index.js
++++ b/member-portal/server/index.js
+@@ -310,8 +310,9 @@ app.get('/api/loan-application/list', async (req, res) => {
+ 
+     const params = [];
+     if (user_id) {
+-      query += ' WHERE user_id = $1';
+-      params.push(user_id);
++      // Compare user_id as text to avoid type mismatch (some deployments use UUIDs, others integer ids)
++      query += ' WHERE user_id::text = $1';
++      params.push(String(user_id));
+     }
+ 
+     query += ' ORDER BY submitted_at DESC';
+-- 
+2.51.1
+

@@ -1,0 +1,296 @@
+.staff-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-height);
+  display: flex;
+  align-items: center; /* ensure vertical centering of header content */
+  background: var(--gradient-primary);
+  z-index: 1000;
+  box-shadow: var(--card-shadow);
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* avoid forcing a fixed 100% height which can create clipping in some
+     environments; allow content to center naturally inside the header */
+  height: auto;
+  padding: 0 1.25rem; /* reduce horizontal padding to avoid overflow */
+  max-width: 100%;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.hamburger-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--white);
+  font-size: 2rem;
+  margin-right: 0.75rem;
+  /* make the clickable area larger and match avatar/logout sizing */
+  width: calc(var(--header-height) - 18px);
+  height: calc(var(--header-height) - 18px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.logo-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.logo-icon {
+  font-size: 1.6rem;
+  background: var(--white);
+  /* size the logo to fit comfortably within the header height so it never clips */
+  width: calc(var(--header-height) - 20px);
+  height: calc(var(--header-height) - 20px);
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Logo SVG sizing inside circular container */
+.logo-icon .logo-svg {
+  width: 58%;
+  height: auto;
+  display: block;
+}
+
+.logo-text h1 {
+  color: var(--white);
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1;
+}
+
+.logo-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.logo-text {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.logo-text h1 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: auto; /* pin right block to the far right */
+}
+
+/* Ensure the right block is visually pinned to the header's right edge (desktop)
+   and doesn't get centered with the header content container. Use absolute
+   positioning relative to the fixed .staff-header. On small screens keep the
+   inline behavior so mobile layout remains intact. */
+@media (min-width: 900px) {
+  .staff-header {
+    /* ensure positioning context for absolute children */
+    position: fixed;
+  }
+  .header-right {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-left: 0;
+    z-index: 1500;
+  }
+}
+
+.staff-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--white);
+  min-width: 0;
+}
+
+.staff-details {
+  display: inline-block;
+  text-align: right;
+  vertical-align: middle;
+  max-width: 220px; /* limit width so it doesn't push header */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staff-name {
+  display: block;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.staff-role {
+  display: block;
+  font-size: 0.8rem;
+  opacity: 0.9;
+  text-transform: capitalize;
+}
+
+.staff-avatar {
+  width: calc(var(--header-height) - 18px);
+  height: calc(var(--header-height) - 18px);
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--primary-purple);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.logout-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--white);
+  width: calc(var(--header-height) - 30px);
+  height: calc(var(--header-height) - 30px);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+/* Role badge styling in header */
+.role-badge-header {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin-left: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.role-admin {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fecaca;
+}
+
+.role-manager {
+  background: rgba(16, 185, 129, 0.2);
+  color: #a7f3d0;
+}
+
+.role-loan_officer {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fde68a;
+}
+
+.role-cashier {
+  background: rgba(59, 130, 246, 0.2);
+  color: #bfdbfe;
+}
+
+.role-it_admin {
+  background: rgba(168, 85, 247, 0.2);
+  color: #e9d5ff;
+}
+
+@media (max-width: 768px) {
+  .header-content {
+    padding: 0 1rem;
+  }
+  
+  .staff-details {
+    display: none;
+  }
+  
+  .logo-text h1 {
+    font-size: 1.3rem;
+  }
+  
+  .logo-subtitle {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 1366px) {
+  .hamburger-btn {
+    /* keep visible and slightly larger on medium/smaller screens */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.1rem;
+  }
+}
+
+/* Prevent logo wrapping and keep a tidy header */
+.logo-text h1 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 420px) {
+  .logo-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 1.6rem;
+  }
+
+  .logo-text h1 {
+    font-size: 1.1rem;
+  }
+
+  .logo-subtitle {
+    display: none;
+  }
+
+  .staff-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 0.9rem;
+  }
+
+  .logout-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  .header-content {
+    padding: 0 0.5rem;
+  }
+}

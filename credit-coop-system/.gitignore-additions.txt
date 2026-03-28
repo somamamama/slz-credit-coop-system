@@ -1,0 +1,48 @@
+# Important: Add these to your .gitignore
+
+# Make sure these files are NOT committed to version control
+# They contain sensitive production credentials
+
+# Production environment files (contain secrets)
+.env.production
+*/.env.production
+*/server/.env.production
+
+# Keep the example files (these are safe to commit)
+# .env.production.example files ARE okay to commit
+
+# Build directories (optional - can be large)
+build/
+*/build/
+
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pm2.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Uploads (user-uploaded files)
+uploads/
+*/uploads/
+
+# Database dumps (may contain sensitive data)
+*.sql
+*.dump
+
+# PM2
+.pm2/

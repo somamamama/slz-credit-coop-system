@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Socket Test - Manager</title>
+  <style>body{font-family:Arial,sans-serif;padding:12px} #log{white-space:pre-wrap;background:#f7f7f7;padding:12px;border-radius:6px;min-height:120px}</style>
+</head>
+<body>
+  <h2>Socket Test Page</h2>
+  <p>This page connects to the staff socket server and joins the <code>manager</code> room. Use this to verify connectivity independent of the React frontend.</p>
+  <div><button id="emitNotify">Send test notify (POST /api/notify/new-application)</button></div>
+  <h3>Socket status: <span id="status">(not connected)</span></h3>
+  <div id="log"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    (function(){
+      function log(m){
+        var el = document.getElementById('log');
+        el.textContent = (new Date()).toLocaleTimeString() + ' - ' + m + '\n' + el.textContent;
+      }
+      try{
+        var socket = io();
+        document.getElementById('status').textContent = 'connecting...';
+        socket.on('connect', function(){ document.getElementById('status').textContent = 'connected ('+socket.id+')'; log('connected '+socket.id); try{ socket.emit('join',{role:'manager'}); log('emitted join manager'); }catch(e){ log('emit join failed: '+e); } });
+        socket.on('connect_error', function(err){ document.getElementById('status').textContent = 'connect_error'; log('connect_error '+err); });
+        socket.on('disconnect', function(r){ document.getElementById('status').textContent = 'disconnected'; log('disconnected '+r); });
+        socket.on('new_application', function(p){ log('new_application received: ' + JSON.stringify(p)); alert('new_application: ' + (p.application_id || p.member_number || 'unknown')); });
+      }catch(err){ log('socket init failed: '+err); }
+
+      document.getElementById('emitNotify').addEventListener('click', function(){
+        fetch('/api/notify/new-application', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ application_id: 9999, member_number: 'TEST999', first_name: 'Tester', last_name: 'Manual', review_status: 'under_review', notify_role: 'manager' }) })
+          .then(function(r){ return r.json(); }).then(function(j){ log('notify POST response: ' + JSON.stringify(j)); }).catch(function(e){ log('notify POST failed: '+e); });
+      });
+    })();
+  </script>
+</body>
+</html>
