@@ -46,8 +46,10 @@ router.post('/register', validinfo, async (req, res) => {
 //login route
 router.post('/login', validinfo, async (req, res) => {
     try {
+
         console.log('LOGIN DEBUG headers=', JSON.stringify(req.headers || {}));
         console.log('LOGIN DEBUG body=', JSON.stringify(req.body || {}));
+
         // Accept either employee_number (snake_case or camelCase) or email for login
         const { email, employee_number, employeeNumber, password } = req.body;
         const empNum = employee_number || employeeNumber;
