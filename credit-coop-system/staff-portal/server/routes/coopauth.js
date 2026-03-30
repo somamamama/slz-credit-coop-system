@@ -46,38 +46,24 @@ router.post('/register', validinfo, async (req, res) => {
 //login route
 router.post('/login', validinfo, async (req, res) => {
     try {
-
-        console.log('LOGIN DEBUG headers=', JSON.stringify(req.headers || {}));
-        console.log('LOGIN DEBUG body=', JSON.stringify(req.body || {}));
-
         // Accept either employee_number (snake_case or camelCase) or email for login
         const { email, employee_number, employeeNumber, password } = req.body;
         const empNum = employee_number || employeeNumber;
 
-        console.log('LOGIN DEBUG empNum=', empNum, 'email=', email, 'password=', password ? '***' : 'none');
-
         let userRes;
         if (empNum) {
-            console.log('LOGIN DEBUG querying by employee_number:', empNum);
             userRes = await pool.query("SELECT * FROM users WHERE employee_number = $1", [empNum]);
         } else {
-            console.log('LOGIN DEBUG querying by email:', email);
             userRes = await pool.query("SELECT * FROM users WHERE user_email = $1", [email]);
         }
 
-        console.log('LOGIN DEBUG userRes.rows.length=', userRes.rows.length);
         if (!userRes || userRes.rows.length === 0) {
-            console.log('LOGIN DEBUG user not found');
             return res.status(401).json({ error: "Password or credentials are incorrect" });
         }
 
         const userRow = userRes.rows[0];
-        console.log('LOGIN DEBUG found user:', userRow.user_email, 'with employee_number:', userRow.employee_number);
-        console.log('LOGIN DEBUG stored hash starts with:', userRow.user_password.substring(0, 10));
         const validPassword = await bcrypt.compare(password, userRow.user_password);
-        console.log('LOGIN DEBUG bcrypt.compare result:', validPassword);
         if (!validPassword) {
-            console.log('LOGIN DEBUG password mismatch');
             return res.status(401).json({ error: "Password or credentials are incorrect" });
         }
 
