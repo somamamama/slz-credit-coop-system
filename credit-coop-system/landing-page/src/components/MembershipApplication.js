@@ -2,6 +2,24 @@ import React, { useState } from 'react';
 import './MembershipApplication.css';
 import { ReactComponent as CheckCircleIcon } from '../assets/icons/finance/check-circle-svgrepo-com.svg';
 
+const sanitizeApiBase = (value) => {
+  const normalized = String(value || '').trim();
+
+  // Guard against unresolved env placeholders like REACT_APP_* ending up in URLs.
+  if (!normalized || /^\/?REACT_APP_/i.test(normalized)) {
+    return '';
+  }
+
+  return normalized.replace(/\/$/, '');
+};
+
+const FALLBACK_API_BASE = process.env.NODE_ENV === 'production'
+  ? 'https://api.slzcreditcoop.online'
+  : 'http://localhost:3002';
+
+const MEMBERSHIP_API_BASE =
+  sanitizeApiBase(process.env.REACT_APP_LANDING_API_URL) || FALLBACK_API_BASE;
+
 const MembershipApplication = () => {
   const [formData, setFormData] = useState({
     // Basic membership information
@@ -170,7 +188,7 @@ const MembershipApplication = () => {
       });
 
       // Submit to backend API
-      const response = await fetch('http://localhost:3002/api/membership-application', {
+      const response = await fetch(`${MEMBERSHIP_API_BASE}/api/membership-application`, {
         method: 'POST',
         body: formDataToSubmit
       });
