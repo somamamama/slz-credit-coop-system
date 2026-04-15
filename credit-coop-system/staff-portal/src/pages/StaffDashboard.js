@@ -26,7 +26,7 @@ const StaffDashboard = ({ setAuth }) => {
     useEffect(() => {
         const fetchUserInfo = async () => {
             try {
-                const response = await fetch("http://localhost:5000/auth/profile", {
+                const response = await fetch(resolveRuntimeUrl('http://localhost:5000/auth/profile'), {
                     method: "GET",
                     headers: {
                         "Content-Type": "application/json",
@@ -65,7 +65,7 @@ const StaffDashboard = ({ setAuth }) => {
 
         const loadInitialApplications = async () => {
             try {
-                const response = await fetch("http://localhost:3002/api/membership-applications", {
+                const response = await fetch(resolveRuntimeUrl('http://localhost:3002/api/membership-applications'), {
                     method: "GET",
                     headers: {
                         "Content-Type": "application/json",
@@ -87,7 +87,7 @@ const StaffDashboard = ({ setAuth }) => {
         const loadStats = async () => {
             try {
                 // fetch total members from staff API
-                const membersResp = await fetch('http://localhost:5000/api/user-management/members/count', {
+                const membersResp = await fetch(resolveRuntimeUrl('http://localhost:5000/api/user-management/members/count'), {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -102,7 +102,7 @@ const StaffDashboard = ({ setAuth }) => {
                 }
 
                 // fetch membership applications and compute pending count
-                const appsResp = await fetch('http://localhost:3002/api/membership-applications', {
+                const appsResp = await fetch(resolveRuntimeUrl('http://localhost:3002/api/membership-applications'), {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
@@ -127,7 +127,7 @@ const StaffDashboard = ({ setAuth }) => {
 
         const loadApprovedLoans = async () => {
             try {
-                const resp = await axios.get('http://localhost:5000/api/loan-review/applications?status=approved', {
+                const resp = await axios.get(resolveRuntimeUrl('http://localhost:5000/api/loan-review/applications?status=approved'), {
                     headers: {
                         'Content-Type': 'application/json',
                         token: localStorage.token

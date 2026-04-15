@@ -4,6 +4,7 @@ import { ReactComponent as DepositIcon } from './assets/money-bag-svgrepo-com.sv
 import { ReactComponent as LoanIcon } from './assets/loan-round-svgrepo-com.svg';
 import { ReactComponent as ApplicationIcon} from './assets/clipboard-text-svgrepo-com.svg';
 import './Dashboard.css';
+import { resolveRuntimeUrl } from '../runtimeUrlConfig';
 
 const Dashboard = ({ setAuth, userRole }) => {
   // Get role-specific title and description
@@ -53,7 +54,7 @@ const Dashboard = ({ setAuth, userRole }) => {
     const loadMetrics = async () => {
       try {
         // total members from staff server
-        const membersResp = await fetch('http://localhost:5000/api/user-management/members/count', {
+        const membersResp = await fetch(resolveRuntimeUrl('http://localhost:5000/api/user-management/members/count'), {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -68,7 +69,7 @@ const Dashboard = ({ setAuth, userRole }) => {
         }
 
         // pending applications from member server
-        const appsResp = await fetch('http://localhost:3002/api/membership-applications', {
+        const appsResp = await fetch(resolveRuntimeUrl('http://localhost:3002/api/membership-applications'), {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',

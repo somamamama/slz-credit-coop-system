@@ -31,7 +31,7 @@ const MembershipApplications = () => {
 
   const fetchSuggestedMembershipNumber = async (applicationId) => {
     try {
-      const res = await fetch(`http://localhost:3002/api/membership-applications/${applicationId}/suggest-membership-number`);
+      const res = await fetch(resolveRuntimeUrl(`http://localhost:3002/api/membership-applications/${applicationId}/suggest-membership-number`));
       const body = await res.json();
       if (res.ok && body && body.membershipNumber) {
         return body.membershipNumber;
@@ -206,7 +206,7 @@ const MembershipApplications = () => {
 
   const fetchApplications = async () => {
     try {
-      const response = await fetch('http://localhost:3002/api/membership-applications');
+      const response = await fetch(resolveRuntimeUrl('http://localhost:3002/api/membership-applications'));
       const result = await response.json();
 
       const apps = result && result.applications ? result.applications : [];
@@ -241,7 +241,7 @@ const MembershipApplications = () => {
 
   const updateApplicationStatus = async (applicationId, status, reviewNotes = '', membershipNum = '') => {
     try {
-      const response = await fetch(`http://localhost:3002/api/membership-applications/${applicationId}/status`, {
+      const response = await fetch(resolveRuntimeUrl(`http://localhost:3002/api/membership-applications/${applicationId}/status`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -274,7 +274,7 @@ const MembershipApplications = () => {
 
     try {
       setUploadingReceipt(true);
-      const res = await fetch(`http://localhost:3002/api/membership-applications/${applicationId}/receipt`, {
+      const res = await fetch(resolveRuntimeUrl(`http://localhost:3002/api/membership-applications/${applicationId}/receipt`), {
         method: 'POST',
         body: formData
       });
